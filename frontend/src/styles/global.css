@@ -1,0 +1,155 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.5;
+  background-color: #f5f5f5;
+  color: #111;
+}
+
+/* ==============
+   Layout / Utility
+   ============== */
+
+.page {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 1rem;
+  background-color: #fff;
+}
+
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.text-box {
+  background: #f7f7f7;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-top: 1rem;
+  overflow-x: auto;
+}
+
+.line-wrapper {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 8px;
+}
+
+.line-number {
+  width: 2rem;
+  text-align: right;
+  font-family: system-ui, sans-serif;
+  font-size: 0.9rem;
+  color: #555;
+  user-select: none;
+  flex-shrink: 0;
+  margin-top: 1.25rem;
+}
+
+.pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre;
+  margin: 0;
+  line-height: 1.25;
+}
+
+.textarea-chords {
+  width: 100%;
+  min-height: 1.8rem;
+  font-family: inherit;
+  font-size: 0.95rem;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  resize: vertical;
+  background-color: #fff;
+}
+
+.chord-hit {
+  color: #d00;
+}
+
+.no-margin {
+  margin: 0;
+}
+
+/* ==============
+   Buttons
+   ============== */
+
+.primary-button {
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.primary-button:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.btn-edit {
+  background-color: #007bff;
+}
+
+.btn-save {
+  background-color: #28a745;
+}
+
+.is-saving {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.song-item-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font-size: 1rem;
+  width: 100%;
+  font-family: inherit;
+}
+
+.song-item-btn:hover,
+.song-item-btn:focus {
+  text-decoration: underline;
+  outline: none;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 12px;
+  margin: 12px 0;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.search-input:focus {
+  border-color: #666;
+}
