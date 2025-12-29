@@ -50,29 +50,13 @@ public class SecurityConfig {
     }
 
     @Bean
-    @Profile("dev")
     public CorsConfigurationSource corsConfigurationSource() {
         var cfg = new CorsConfiguration();
-        cfg.setAllowedOrigins(List.of("http://localhost:5173"));
+        cfg.setAllowedOrigins(List.of("http://localhost:5173", "http://85.215.82.36"));
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         cfg.setAllowedHeaders(List.of("*"));
         cfg.setAllowCredentials(true);
-
-        var source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", cfg);
-        return source;
-    }
-
-    @Bean
-    @Profile("!dev")
-    public CorsConfigurationSource corsConfigurationSource() {
-        var cfg = new CorsConfiguration();
-        // In Prod am besten gar kein Cross-Origin nötig:
-        // Wenn du es trotzdem willst: erlaub explizit deine Origin:
-        cfg.setAllowedOrigins(List.of("http://85.215.82.36")); // später Domain ergänzen
-        cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
-        cfg.setAllowedHeaders(List.of("*"));
-        cfg.setAllowCredentials(true);
+        cfg.setMaxAge(3600L);
 
         var source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", cfg);
