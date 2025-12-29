@@ -37,14 +37,26 @@ services:
     image: nginx:alpine
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on: [frontend, backend]
-    networks: [songtexts_net]
+      - letsencrypt:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    depends_on: [ frontend, backend ]
+    networks: [ songtexts_net ]
     restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    depends_on: [ proxy ]
 
 networks:
   songtexts_net:
 
 volumes:
   songtexts_db:
+  letsencrypt:
+  certbot-www:
