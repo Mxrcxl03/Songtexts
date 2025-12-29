@@ -51,7 +51,7 @@ public class SecurityConfig {
 
     @Bean
     @Profile("dev")
-    public CorsConfigurationSource corsConfigurationSourceDev() {
+    public CorsConfigurationSource corsConfigurationSource() {
         var cfg = new CorsConfiguration();
         cfg.setAllowedOrigins(List.of("http://localhost:5173"));
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
@@ -65,7 +65,7 @@ public class SecurityConfig {
 
     @Bean
     @Profile("!dev")
-    public CorsConfigurationSource corsConfigurationSourceProd() {
+    public CorsConfigurationSource corsConfigurationSource() {
         var cfg = new CorsConfiguration();
         // In Prod am besten gar kein Cross-Origin nötig:
         // Wenn du es trotzdem willst: erlaub explizit deine Origin:
