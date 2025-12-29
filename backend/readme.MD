@@ -1,2 +1,1 @@
-$env:APP_ADMIN_PASSWORD="admin"
-./mvnw spring-boot:run
+APP_ADMIN_PASSWORD=admin ./mvnw spring-boot:run

@@ -42,10 +42,7 @@ public class AuthenticationService {
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, jwtCookie.toString())
                 .header(HttpHeaders.SET_COOKIE, jwtRefreshCookie.toString())
-                .body(
-                        user.getId() +
-                                user.getUsername() +
-                                user.getEmail());
+                .body(user.getId() + user.getUsername() + user.getEmail());
     }
 
     public ResponseEntity<?> register(RegisterRequest registerRequest) {
