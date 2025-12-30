@@ -1,11 +1,8 @@
 import axios from 'axios';
 import type { AxiosInstance, AxiosRequestConfig } from 'axios';
 
-const BASE_URL = import.meta.env.VITE_API_URL as string | undefined;
-if (!BASE_URL) throw new Error('VITE_API_URL fehlt');
-
 const api: AxiosInstance = axios.create({
-  baseURL: BASE_URL,
+  baseURL: "/api/v1",
   withCredentials: true,
 });
 
