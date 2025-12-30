@@ -1,2 +1,17 @@
+# Normalize text files in repo to LF
+* text=auto eol=lf
+
+# Maven wrapper scripts
 /mvnw text eol=lf
+/mvnw.cmd text eol=crlf
 *.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Common text formats (explicit, to avoid edge cases)
+*.java text eol=lf
+*.xml text eol=lf
+*.properties text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.sh text eol=lf
