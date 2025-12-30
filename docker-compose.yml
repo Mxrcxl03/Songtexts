@@ -37,6 +37,7 @@ services:
     image: nginx:alpine
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - letsencrypt:/etc/letsencrypt
@@ -51,6 +52,31 @@ services:
       - letsencrypt:/etc/letsencrypt
       - certbot-www:/var/www/certbot
     depends_on: [ proxy ]
+
+  certbot-renew:
+    image: certbot/certbot
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./:/work
+    working_dir: /work
+    entrypoint: /bin/sh
+    command: >
+      -lc '
+      set -e;
+      echo "[certbot-renew] started";
+      while :; do
+        echo "[certbot-renew] renewing...";
+        certbot renew --webroot -w /var/www/certbot --quiet;
+        echo "[certbot-renew] reloading nginx...";
+        docker compose exec -T proxy nginx -s reload || docker compose restart proxy;
+        echo "[certbot-renew] sleeping 12h...";
+        sleep 12h;
+      done'
+    depends_on: [ proxy ]
+    networks: [ songtexts_net ]
+    restart: unless-stopped
 
 networks:
   songtexts_net:
