@@ -30,4 +30,4 @@
 /.nb-gradle/
 
 # --- Env / secrets ---
-.env
+../.env

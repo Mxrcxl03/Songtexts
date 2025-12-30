@@ -1,0 +1,52 @@
+services:
+  db:
+    image: postgres:12
+    container_name: songtexts-db-dev
+    environment:
+      POSTGRES_DB: songtexte
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - songtexts_db_dev:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d songtexte"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: songtexts-backend-dev
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/songtexte
+      SPRING_DOCKER_COMPOSE_ENABLED: "false"
+      SPRING_PROFILES_ACTIVE: dev
+    ports:
+      - "8080:8080"
+      - "5173:5173"
+    restart: unless-stopped
+
+  frontend:
+    image: node:20
+    container_name: songtexts-frontend-dev
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    env_file: .env
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 5173"
+    depends_on:
+      - backend
+    network_mode: "service:backend"
+
+volumes:
+  songtexts_db_dev:
