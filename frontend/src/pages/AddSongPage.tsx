@@ -1,150 +1,167 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import axios from 'axios';
 import SongService from '../services/song.service';
-import type { SongCreate, SongLineCreate } from '../types/song';
-import type { ChordAnnotation } from '../types/chordAnnotation';
-
-export function parseChordLineForCreate(src: string): {
-  text: string;
-  chordAnnotations: ChordAnnotation[];
-} {
-  const raw = src.replaceAll('\r', '');
-  const line = raw.replace(/^[\s\u00A0]+/, '').replace(/[\s\u00A0]+$/, '');
-  const tag = /\[([^\]]+)\]/g;
-  let m: RegExpExecArray | null;
-  let cursor = 0;
-  let plain = '';
-  const chordAnnotations: ChordAnnotation[] = [];
-
-  while ((m = tag.exec(line)) !== null) {
-    plain += line.slice(cursor, m.index);
-    const pos = Array.from(plain).length;
-    chordAnnotations.push({ name: m[1], position: pos });
-    cursor = m.index + m[0].length;
-  }
-  plain += line.slice(cursor);
-  return { text: plain, chordAnnotations };
-}
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import '../styles/global.css';
 
 export const AddSongPage = () => {
+  const isOnline = useOnlineStatus();
   const [artist, setArtist] = useState('');
   const [name, setName] = useState('');
   const [album, setAlbum] = useState('');
-  const [rawLines, setRawLines] = useState('');
-  const [tooLongChord, setTooLongChord] = useState(false);
+  const [bpm, setBpm] = useState('');
+  const [capo, setCapo] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const lines = rawLines.replaceAll('\r', '').split('\n');
-    let foundTooLong = false;
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      const { chordAnnotations } = parseChordLineForCreate(line);
-      for (const c of chordAnnotations) {
-        if (c.name && c.name.length > 10) {
-          foundTooLong = true;
-          break;
-        }
-      }
-      if (foundTooLong) break;
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) {
+      setFile(null);
+      return;
     }
-    setTooLongChord(foundTooLong);
-  }, [rawLines]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const lines: SongLineCreate[] = rawLines
-      .replaceAll('\r', '')
-      .split('\n')
-      .filter((line) => line.trim().length > 0)
-      .map((line, index) => {
-        const { text, chordAnnotations } = parseChordLineForCreate(line);
-        return { text, orderIndex: index + 1, chordAnnotations };
-      });
-
-    const newSong: SongCreate = { artist, name, album, lines };
-    console.log('CREATE-PAYLOAD:', JSON.stringify(newSong, null, 2));
-
-    SongService.createSong(newSong)
-      .then(() => navigate('/'))
-      .catch((err: Error) => console.error('Fehler beim Erstellen:', err));
+    const isHtmByName = selectedFile.name.toLowerCase().endsWith('.htm');
+    if (isHtmByName) {
+      setFile(selectedFile);
+    } else {
+      alert('Bitte lade eine .htm Datei hoch');
+      setFile(null);
+    }
   };
 
+  const handleFileSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!file || !artist || !name || !album) {
+      alert('Bitte alle Felder ausfüllen');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('artist', artist);
+      formData.append('name', name);
+      formData.append('album', album);
+      if (bpm.trim()) {
+        formData.append('bpm', bpm.trim());
+      }
+      if (capo.trim()) {
+        formData.append('capo', capo.trim());
+      }
+
+      await SongService.uploadSongFile(formData);
+      navigate('/');
+    } catch (err) {
+      console.error('Fehler beim Upload:', err);
+      if (axios.isAxiosError(err)) {
+        const serverMessage =
+          typeof err.response?.data === 'string'
+            ? err.response.data
+            : err.response?.data?.message;
+        alert(serverMessage || 'Fehler beim Hochladen der Datei');
+      } else {
+        alert('Fehler beim Hochladen der Datei');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (!isOnline) {
+    return (
+      <div className="page page-form">
+        <h2>Neuen Song hinzufügen</h2>
+        <p className="offline-banner">
+          Offline-Modus aktiv: Neue Songs können nur online erstellt werden.
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ maxWidth: 600, margin: '0 auto', padding: '1rem' }}>
+    <div className="page page-form">
       <h2>Neuen Song hinzufügen</h2>
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label htmlFor="artist">Künstler:</label>
-          <br />
+
+      <form onSubmit={handleFileSubmit} className="stack-form">
+        <div className="form-field">
+          <label htmlFor="artist-file">Künstler:</label>
           <input
             value={artist}
-            id="artist"
+            id="artist-file"
             onChange={(e) => setArtist(e.target.value)}
+            className="text-input"
             required
           />
         </div>
-        <div>
-          <label htmlFor="title">Titel:</label>
-          <br />
+        <div className="form-field">
+          <label htmlFor="title-file">Titel:</label>
           <input
-            id="title"
+            id="title-file"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            className="text-input"
             required
           />
         </div>
-        <div>
-          <label htmlFor="album">Album:</label>
-          <br />
+        <div className="form-field">
+          <label htmlFor="album-file">Album:</label>
           <input
-            id="album"
+            id="album-file"
             value={album}
             onChange={(e) => setAlbum(e.target.value)}
+            className="text-input"
             required
+          />
+        </div>
+        <div className="form-field">
+          <label htmlFor="bpm-file">BPM (optional):</label>
+          <input
+            id="bpm-file"
+            type="number"
+            min={1}
+            value={bpm}
+            onChange={(e) => setBpm(e.target.value)}
+            placeholder="z. B. 120"
+            className="text-input"
+          />
+        </div>
+        <div className="form-field">
+          <label htmlFor="capo-file">Capo (optional):</label>
+          <input
+            id="capo-file"
+            type="number"
+            min={0}
+            value={capo}
+            onChange={(e) => setCapo(e.target.value)}
+            placeholder="z. B. 2"
+            className="text-input"
           />
         </div>
 
-        <div style={{ marginTop: '1rem' }}>
-          <label htmlFor="song-lines">
-            Songzeilen (eine pro Zeile, Akkorde in eckigen Klammern):
-          </label>
-          <br />
-          <textarea
-            id="song-lines"
-            value={rawLines}
-            onChange={(e) => setRawLines(e.target.value)}
-            rows={6}
-            style={{
-              width: '100%',
-              backgroundColor: tooLongChord ? '#ffe6e6' : 'white',
-              border: tooLongChord ? '2px solid #ff8080' : '1px solid #ccc',
-            }}
-            placeholder={`Beispiel:\n[G]Hello [D]darkness my [Em]old [C]friend`}
+        <div className="form-field">
+          <label htmlFor="file-input">.htm-Datei hochladen:</label>
+          <input
+            id="file-input"
+            type="file"
+            accept=".htm,text/html"
+            onChange={handleFileChange}
+            required
+            className="text-input"
           />
-          {tooLongChord && (
-            <div style={{ color: '#cc0000', marginTop: '0.25rem' }}>
-              ⚠️ Mindestens ein Akkord ist länger als 10 Zeichen.
-            </div>
-          )}
+          {file && <p className="file-hint">Datei ausgewählt: {file.name}</p>}
         </div>
 
         <button
           type="submit"
-          disabled={tooLongChord}
-          style={{
-            backgroundColor: tooLongChord ? '#aaa' : '#28a745',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            padding: '0.5rem 1rem',
-            marginTop: '1rem',
-            cursor: tooLongChord ? 'not-allowed' : 'pointer',
-          }}
+          disabled={!file || isLoading}
+          className="primary-button btn-confirm"
         >
-          Speichern
+          {isLoading ? 'Wird hochgeladen...' : 'Datei + Tags speichern'}
         </button>
       </form>
     </div>

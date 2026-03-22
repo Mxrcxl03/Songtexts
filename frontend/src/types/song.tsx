@@ -1,40 +1,41 @@
-import type { ChordAnnotation } from './chordAnnotation'
+import type { ChordAnnotation } from './chordAnnotation';
 
 export type SongLine = {
-  id?: number           
-  orderIndex: number
-  text: string
-  chordAnnotations: ChordAnnotation[]
-}
+  id?: number;
+  orderIndex: number;
+  text: string;
+  chordAnnotations: ChordAnnotation[];
+};
 
 export type Song = {
-  id: number
-  artist: string
-  name: string
-  album: string
-  lines: SongLine[]
-}
+  id: number;
+  artist: string;
+  name: string;
+  album: string;
+  bpm?: number | null;
+  capo?: number | null;
+  lines: SongLine[];
+};
 
 export type SongLineViewRowProps = {
-  index: number
-  line: SongLine
-}
+  index: number;
+  line: SongLine;
+};
 
 export type SongLineEditRowProps = {
-  index: number
-  line: SongLine
+  index: number;
+  line: SongLine;
   onChangeFromMarkup: (
     index: number,
     text: string,
     chords: ChordAnnotation[]
-  ) => void
+  ) => void;
   onSplitLine: (
     index: number,
     beforeMarkup: string,
     afterMarkup: string
-  ) => void
-}
+  ) => void;
+};
 
-
-export type SongLineCreate = Omit<SongLine, 'id'>
-export type SongCreate = Omit<Song, 'id'>
+export type SongLineCreate = Omit<SongLine, 'id'>;
+export type SongCreate = Omit<Song, 'id'>;

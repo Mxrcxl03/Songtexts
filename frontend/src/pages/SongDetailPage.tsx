@@ -18,6 +18,8 @@ import type {
 import type { ChordAnnotation, LooseChord } from '../types/chordAnnotation';
 import type { User } from '../types/user';
 import UserService from '../services/user.service';
+import SongService from '../services/song.service';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
 
 export function buildChordAndTextCentered(
   textInput: string | null | undefined,
@@ -62,20 +64,28 @@ export function buildChordAndTextCentered(
     }
   }
 
+  const charOccurrences = new Map<string, number>();
+  let textPos = -1;
+
   const textRow = (
     <span>
       {Array.from({ length: FIXED_LEFT_PAD }, (_, i) => (
         <span key={'pad-' + i}>&nbsp;</span>
       ))}
-      {textChars.map((ch, i) =>
-        hitPositions.has(i) ? (
-          <span key={i} className="chord-hit">
+      {textChars.map((ch) => {
+        textPos += 1;
+        const nextOccurrence = (charOccurrences.get(ch) ?? 0) + 1;
+        charOccurrences.set(ch, nextOccurrence);
+        const charKey = `char-${ch}-${nextOccurrence}`;
+
+        return hitPositions.has(textPos) ? (
+          <span key={charKey} className="chord-hit">
             {ch}
           </span>
         ) : (
-          <span key={i}>{ch}</span>
-        )
-      )}
+          <span key={charKey}>{ch}</span>
+        );
+      })}
     </span>
   );
 
@@ -168,20 +178,35 @@ function parseLineMarkup(markupInput: string): {
   return { text, chords };
 }
 
-function SongLineViewRow({ index, line }: Readonly<SongLineViewRowProps>) {
-  const { chordRow, textRow } = buildChordAndTextCentered(
-    line?.text,
-    line?.chordAnnotations
-  );
-  const chordOut = chordRow || '\u00A0';
+function SongLineViewRow({ line }: Readonly<SongLineViewRowProps>) {
+  const text = line?.text ?? '';
+  const chords = line?.chordAnnotations ?? [];
+
+  // Build a string with chords positioned above the text using spaces
+  let chordLine = '';
+  let textPos = 0;
+
+  // Sort chords by position
+  const sortedChords = [...chords]
+    .filter((c) => c.name && c.name.trim().length > 0)
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+
+  for (const chord of sortedChords) {
+    const pos = chord.position ?? 0;
+    if (pos >= textPos) {
+      // Add spaces up to the chord position
+      chordLine += ' '.repeat(pos - textPos);
+      chordLine += chord.name;
+      textPos = pos;
+    }
+  }
 
   return (
-    <div className="line-wrapper">
-      <div className="line-number">{index + 1}</div>
-      <div style={{ flex: 1 }}>
-        <pre className="pre">{chordOut}</pre>
-        <pre className="pre">{textRow}</pre>
-      </div>
+    <div className="line-wrapper-word">
+      {chordLine.trim().length > 0 && (
+        <pre className="line-chords-word">{chordLine}</pre>
+      )}
+      <pre className="line-text-word">{text || '\u00A0'}</pre>
     </div>
   );
 }
@@ -234,6 +259,8 @@ function SongLineEditRow({
 }
 
 export function SongDetailPage() {
+  const isOnline = useOnlineStatus();
+  const isOffline = !isOnline;
   const { id } = useParams<{ id: string }>();
 
   const [song, setSong] = useState<Song | null>(null);
@@ -268,6 +295,8 @@ export function SongDetailPage() {
         setSong({
           ...data,
           album: (data as any).album ?? null,
+          bpm: (data as any).bpm ?? null,
+          capo: (data as any).capo ?? null,
           lines: Array.isArray((data as any).lines) ? (data as any).lines : [],
         });
       } catch (err) {
@@ -360,8 +389,22 @@ export function SongDetailPage() {
     });
   };
 
+  const handleNumberMetaChange = (field: 'bpm' | 'capo', value: string) => {
+    if (!song) return;
+
+    const parsed = value.trim() === '' ? null : Number.parseInt(value, 10);
+    setSong({
+      ...song,
+      [field]: Number.isNaN(parsed) ? null : parsed,
+    });
+  };
+
   const handleToggleEditOrSave = async () => {
     if (!song) return;
+    if (isOffline) {
+      setError('Offline-Modus: Bearbeiten ist nicht moeglich.');
+      return;
+    }
 
     if (!isEditing) {
       setIsEditing(true);
@@ -400,9 +443,46 @@ export function SongDetailPage() {
     }
   };
 
+  const handleExportHtml = async () => {
+    if (!song) return;
+
+    try {
+      const response = await SongService.exportToHtml(song.id);
+      const url = globalThis.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${song.name}.htm`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      globalThis.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Fehler beim Download:', err);
+      setError('Fehler beim Download der HTML-Datei');
+    }
+  };
+
+  const handleViewHtml = async () => {
+    if (!song) return;
+
+    try {
+      const viewUrl = `/song/${encodeURIComponent(String(song.id))}/view`;
+      window.open(viewUrl, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      console.error('Fehler beim Laden des HTML:', err);
+      setError('Fehler beim Laden der HTML-Anzeige');
+    }
+  };
+
   let buttonLabel = 'Edit';
   if (isEditing) buttonLabel = 'Speichern';
   if (saving) buttonLabel = 'Speichert…';
+
+  useEffect(() => {
+    if (isOffline && isEditing) {
+      setIsEditing(false);
+    }
+  }, [isOffline, isEditing]);
 
   const renderLineRow = (line: SongLine, index: number) => {
     if (isEditing) {
@@ -423,32 +503,83 @@ export function SongDetailPage() {
   if (error) return <p style={{ color: 'crimson' }}>Fehler: {error}</p>;
   if (!song) return <p>Kein Song gefunden.</p>;
   const isAdmin = currentUser?.role === 'ADMIN';
+  const canAdminEdit = isAdmin && isOnline;
   const hasNoLines = !song?.lines || song?.lines.length === 0;
 
   return (
     <div className="page">
+      {isOffline && (
+        <div className="offline-banner">
+          Offline-Modus aktiv: Song ist nur lesbar.
+        </div>
+      )}
+
       <div className="header-row">
         <h2 className="no-margin">{song.name}</h2>
-        {isAdmin && (
+        <div className="header-actions">
           <button
-            onClick={handleToggleEditOrSave}
-            disabled={saving}
-            className={
-              'primary-button ' +
-              (isEditing ? 'btn-save' : 'btn-edit') +
-              (saving ? ' is-saving' : '')
-            }
+            onClick={handleViewHtml}
+            className="primary-button btn-export"
+            title="Als HTML-Seite anzeigen"
           >
-            {buttonLabel}
+            🔍 HTML
           </button>
-        )}
+          <button
+            onClick={handleExportHtml}
+            className="primary-button btn-export"
+            title="Song als HTML downloaden"
+          >
+            ↓ HTML
+          </button>
+          {canAdminEdit && (
+            <button
+              onClick={handleToggleEditOrSave}
+              disabled={saving}
+              className={
+                'primary-button ' +
+                (isEditing ? 'btn-save' : 'btn-edit') +
+                (saving ? ' is-saving' : '')
+              }
+            >
+              {buttonLabel}
+            </button>
+          )}
+        </div>
       </div>
 
-      <p>
+      <p className="song-meta-field">
         <strong>Artist:</strong> {song.artist}
       </p>
-      <p>
+      <p className="song-meta-field">
         <strong>Album:</strong> {song.album || '—'}
+      </p>
+      <p className="song-meta-field">
+        <strong>BPM:</strong>{' '}
+        {isEditing ? (
+          <input
+            type="number"
+            min={1}
+            value={song.bpm ?? ''}
+            onChange={(e) => handleNumberMetaChange('bpm', e.target.value)}
+            className="text-input meta-number-input"
+          />
+        ) : (
+          (song.bpm ?? '—')
+        )}
+      </p>
+      <p className="song-meta-field">
+        <strong>Capo:</strong>{' '}
+        {isEditing ? (
+          <input
+            type="number"
+            min={0}
+            value={song.capo ?? ''}
+            onChange={(e) => handleNumberMetaChange('capo', e.target.value)}
+            className="text-input meta-number-input"
+          />
+        ) : (
+          (song.capo ?? '—')
+        )}
       </p>
 
       <h3>Text:</h3>
@@ -457,7 +588,9 @@ export function SongDetailPage() {
         {hasNoLines ? (
           <p className="no-margin">Keine Zeilen vorhanden.</p>
         ) : (
-          <div>{song.lines.map(renderLineRow)}</div>
+          <div>
+            {song.lines.map((line, index) => renderLineRow(line, index))}
+          </div>
         )}
       </div>
     </div>

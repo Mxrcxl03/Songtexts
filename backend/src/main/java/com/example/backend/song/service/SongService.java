@@ -14,6 +14,7 @@ import com.example.backend.song.api.dto.SongRequest;
 import com.example.backend.song.api.dto.SongResponse;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.example.backend.song.api.dto.ChordAnnotationDTO;
 import com.example.backend.song.domain.SongLine;
@@ -28,10 +29,11 @@ import lombok.RequiredArgsConstructor;
 public class SongService {
 
     private final SongRepository songRepo;
+    private final DocumentParserService documentParserService;
 
     @Transactional
     public SongResponse createSong(SongRequest req) {
-        Song song = new Song(req.getArtist(), req.getName(), req.getAlbum());
+        Song song = new Song(req.getArtist(), req.getName(), req.getAlbum(), req.getBpm(), req.getCapo());
 
         List<SongLine> lines = new ArrayList<>();
         int idx = 1;
@@ -98,6 +100,8 @@ public class SongService {
                 s.getArtist(),
                 s.getName(),
                 s.getAlbum(),
+                s.getBpm(),
+                s.getCapo(),
                 lrs);
     }
 
@@ -110,7 +114,8 @@ public class SongService {
     }
 
     private Song findSongOrThrow(Long id) {
-        return songRepo.findById(id).orElseThrow(() -> new EntityNotFoundException("Song mit ID " + id + " nicht gefunden"));
+        return songRepo.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Song mit ID " + id + " nicht gefunden"));
     }
 
     private void applyBasicUpdates(Song song, SongRequest request) {
@@ -123,6 +128,8 @@ public class SongService {
         if (request.getAlbum() != null) {
             song.setAlbum(request.getAlbum());
         }
+        song.setBpm(request.getBpm());
+        song.setCapo(request.getCapo());
     }
 
     private void applyLineUpdates(Song song, SongRequest request) {
@@ -220,9 +227,11 @@ public class SongService {
     private SongResponse mapToSongResponse(Song song) {
         return new SongResponse(
                 song.getId(),
-                song.getName(),
                 song.getArtist(),
+                song.getName(),
                 song.getAlbum(),
+                song.getBpm(),
+                song.getCapo(),
                 song.getLines().stream()
                         .sorted(
                                 Comparator
@@ -246,5 +255,44 @@ public class SongService {
                                 ca.getPosition(),
                                 ca.getName()))
                         .collect(Collectors.toList()));
+    }
+
+    @Transactional
+    public SongResponse createSongFromFile(
+            MultipartFile file,
+            String artist,
+            String name,
+            String album,
+            Integer bpm,
+            Integer capo)
+            throws Exception {
+        Song song = new Song(artist, name, album, bpm, capo);
+        song.setHtmlContent(documentParserService.parseHtmlFile(file));
+
+        Song saved = songRepo.save(song);
+        return toResponse(saved);
+    }
+
+    public Song getSongEntity(Long id) {
+        return findSongOrThrow(id);
+    }
+
+    @Transactional
+    public List<Song> getAllSongEntities() {
+        return songRepo.findAll(Sort.by("id").descending());
+    }
+
+    @Transactional
+    public void deleteSong(Long id) {
+        Song song = findSongOrThrow(id);
+        songRepo.delete(song);
+    }
+
+    @Transactional
+    public SongResponse overwriteSongHtml(Long id, MultipartFile file) throws Exception {
+        Song song = findSongOrThrow(id);
+        song.setHtmlContent(documentParserService.parseHtmlFile(file));
+        Song saved = songRepo.save(song);
+        return toResponse(saved);
     }
 }

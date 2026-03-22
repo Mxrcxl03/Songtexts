@@ -1,5 +1,6 @@
 import type { User } from "../types/user";
 import api from "./api";
+import axios from 'axios';
 
 export type LoginRequest = { username: string; password: string };
 export type RegisterRequest = { username: string; email: string; password: string };
@@ -39,8 +40,12 @@ export const logout = (): Promise<void> => {
       console.log("User logged out – Cookies deleted by backend");
     })
     .catch((error) => {
+      if (axios.isAxiosError(error) && error.code === 'ERR_NETWORK') {
+        console.warn('Logout skipped while offline.');
+        return;
+      }
+
       console.error("Logout error:", error);
-      throw error;
     });
 };
 

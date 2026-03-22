@@ -13,5 +13,7 @@ public class SongRequest {
     private String artist;
     private String name;
     private String album;
+    private Integer bpm;
+    private Integer capo;
     private List<SongLineDTO> lines;
 }

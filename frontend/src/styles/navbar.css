@@ -2,6 +2,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.8rem;
   background-color: #1e1e1e;
   color: #fff;
   padding: 10px 20px;
@@ -16,19 +17,53 @@
 .navbar-logo {
   color: #fff;
   text-decoration: none;
-  font-size: 18px;
-  font-weight: bold;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  line-height: 1;
+}
+
+.navbar-logo-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  display: block;
+}
+
+.navbar-logo-text {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.navbar-logo-campfire {
+  color: #ff8c2a;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.navbar-logo-songs {
+  color: #ffffff;
+  font-size: 0.88rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
 }
 
 .navbar-link {
   color: #fff;
   text-decoration: none;
   font-size: 16px;
+  white-space: nowrap;
 }
 
 .navbar-link:hover,
 .navbar-logo:hover {
   text-decoration: underline;
+}
+
+.navbar-logo:hover {
+  text-decoration: none;
 }
 
 .navbar-logout {
@@ -44,4 +79,91 @@
 
 .navbar-logout:hover {
   background-color: #990000;
+}
+
+.connection-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.connection-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.connection-indicator.is-online {
+  background: #10381f;
+  color: #b7f7cb;
+  border-color: #1e7a3f;
+}
+
+.connection-indicator.is-online .connection-dot {
+  background: #34d399;
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.2);
+}
+
+.connection-indicator.is-offline {
+  background: #472612;
+  color: #ffd9bb;
+  border-color: #a65a2b;
+}
+
+.connection-indicator.is-offline .connection-dot {
+  background: #fb923c;
+  box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.2);
+}
+
+@media (max-width: 760px) {
+  .navbar {
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    padding: 10px 14px;
+  }
+
+  .navbar-left {
+    width: 100%;
+    justify-content: space-between;
+    gap: 0.8rem;
+  }
+
+  .navbar-logo-icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .navbar-logo-campfire {
+    font-size: 0.94rem;
+  }
+
+  .navbar-logo-songs {
+    font-size: 0.82rem;
+  }
+
+  .connection-indicator {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .navbar-logout {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .navbar-left {
+    align-items: center;
+  }
+
+  .navbar-link {
+    font-size: 0.92rem;
+  }
 }

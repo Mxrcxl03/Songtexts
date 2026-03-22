@@ -28,6 +28,16 @@ public class Song {
     @Column(nullable = false)
     private String album;
 
+    @Column
+    private Integer bpm;
+
+    @Column
+    private Integer capo;
+
+    @Lob
+    @Column(name = "html_content", columnDefinition = "TEXT")
+    private String htmlContent;
+
     @OneToMany(mappedBy = "song", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("orderIndex ASC")
     private List<SongLine> lines = new ArrayList<>();
@@ -38,8 +48,19 @@ public class Song {
         this.album = album;
     }
 
+    public Song(String artist, String name, String album, Integer bpm, Integer capo) {
+        this(artist, name, album);
+        this.bpm = bpm;
+        this.capo = capo;
+    }
+
     public Song(String artist, String name, String album, List<SongLine> lines) {
         this(artist, name, album);
+        setLines(lines);
+    }
+
+    public Song(String artist, String name, String album, Integer bpm, Integer capo, List<SongLine> lines) {
+        this(artist, name, album, bpm, capo);
         setLines(lines);
     }
 
@@ -47,9 +68,9 @@ public class Song {
         this.lines.clear();
         if (newLines != null) {
             for (SongLine l : newLines) {
-            l.setSong(this);
-            this.lines.add(l);
-        }
+                l.setSong(this);
+                this.lines.add(l);
+            }
         }
     }
 
