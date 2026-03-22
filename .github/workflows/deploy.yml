@@ -25,8 +25,8 @@ jobs:
             git checkout master
             git pull --ff-only origin master
             if docker compose version >/dev/null 2>&1; then
-              docker compose up -d --build --remove-orphans
+              docker compose -f docker-compose.yml up -d --build --remove-orphans
             else
-              docker-compose up -d --build --remove-orphans
+              docker-compose -f docker-compose.yml up -d --build --remove-orphans
             fi
             docker image prune -f
