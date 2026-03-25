@@ -29,4 +29,4 @@ jobs:
             git fetch --all --prune
             git reset --hard "origin/${{ github.ref_name }}"
             docker compose down
-            docker compose up -f docker-compose.yml -d --build
+            docker compose -f docker-compose.yml up -d --build
