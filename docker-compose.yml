@@ -1,16 +1,79 @@
 services:
+  create-htpasswd:
+    container_name: create-htpasswd
+    image: httpd:latest
+    entrypoint: sh
+    command: -c "htpasswd -Bbn ${AUTH_HTPASSWD_USER} ${AUTH_HTPASSWD_PASS} > /auth/htpasswd"
+    volumes:
+      - ./docker-data/auth:/auth
+    working_dir: /auth
+
+  traefik:
+    container_name: traefik
+    image: traefik:latest
+    command:
+      - "--api.insecure=false"
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=${LETSENCRYPT_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/certs/acme.json"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`proxy2.${DOMAIN}`) || Host(`www.proxy2.${DOMAIN}`)"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls=true"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+
+      - "traefik.http.routers.dashboard.service=api@internal"
+
+      - "traefik.http.routers.dashboard.middlewares=auth"
+      - "traefik.http.middlewares.auth.basicauth.usersfile=/auth/htpasswd"
+    depends_on:
+      - create-htpasswd
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./docker-data/certs:/certs
+      - ./docker-data/auth:/auth
+    ports:
+      - "80:80"
+      - "443:443"
+
+  frontend:
+    container_name: frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    labels:
+      - "traefik.http.routers.frontend.rule=Host(`${DOMAIN}`) || Host(`www.${DOMAIN}`)"
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls=true"
+      - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
+    restart: always
+    networks:
+      default:
+
   db:
-    image: postgres:12
+    container_name: database
+    image: postgres:17
     environment:
       POSTGRES_DB: ${DB_NAME:-songtexte}
       POSTGRES_USER: ${DB_USER:-songtexts_app}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-change_me_db}
     volumes:
       - songtexts_db:/var/lib/postgresql/data
-    networks: [songtexts_net]
-    restart: unless-stopped
+    networks: [songtexts_net, default]
+    restart: always
 
   backend:
+    container_name: backend
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -22,66 +85,21 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-change_me_db}
       SECURITY_JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       APP_ADMIN_PASSWORD: ${APP_ADMIN_PASSWORD}
+    labels:
+      - "traefik.http.routers.backend.rule=(Host(`${DOMAIN}`) || Host(`www.${DOMAIN}`)) && PathPrefix(`/api`)"
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.entrypoints=websecure"
+      - "traefik.http.routers.backend.tls=true"
+      - "traefik.http.routers.backend.tls.certresolver=letsencrypt"
     depends_on: [db]
-    networks: [songtexts_net]
-    restart: unless-stopped
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    networks: [songtexts_net]
-    restart: unless-stopped
-
-  proxy:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      - letsencrypt:/etc/letsencrypt
-      - certbot-www:/var/www/certbot
-    depends_on: [ frontend, backend ]
-    networks: [ songtexts_net ]
-    restart: unless-stopped
-
-  certbot:
-    image: certbot/certbot
-    volumes:
-      - letsencrypt:/etc/letsencrypt
-      - certbot-www:/var/www/certbot
-    depends_on: [ proxy ]
-
-  certbot-renew:
-    image: certbot/certbot
-    volumes:
-      - letsencrypt:/etc/letsencrypt
-      - certbot-www:/var/www/certbot
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./:/work
-    working_dir: /work
-    entrypoint: /bin/sh
-    command: >
-      -lc '
-      set -e;
-      echo "[certbot-renew] started";
-      while :; do
-        echo "[certbot-renew] renewing...";
-        certbot renew --webroot -w /var/www/certbot --quiet;
-        echo "[certbot-renew] reloading nginx...";
-        docker compose exec -T proxy nginx -s reload || docker compose restart proxy;
-        echo "[certbot-renew] sleeping 12h...";
-        sleep 12h;
-      done'
-    depends_on: [ proxy ]
-    networks: [ songtexts_net ]
-    restart: unless-stopped
+    networks: [songtexts_net, default]
+    restart: always
 
 networks:
   songtexts_net:
+  default:
 
 volumes:
   songtexts_db:
-  letsencrypt:
-  certbot-www:
+  
+# garbage-collector: /usr/bin/docker exec registry /bin/registry garbage-collect /etc/docker/registry/config.yml
