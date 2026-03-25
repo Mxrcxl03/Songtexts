@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 env:
-  DEPLOY_PATH: ~/projects/Songtexts
+  DEPLOY_PATH: projects/Songtexts
   DEPLOY_HOST: 85.215.82.36
   DEPLOY_USER: deploy
 
