@@ -1,11 +1,43 @@
 import '../styles/navbar.css';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import AuthService from '../services/auth.service';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import UserService from '../services/user.service';
+import type { User } from '../types/user';
+
+type Theme = 'light' | 'dark';
+
+const THEME_STORAGE_KEY = 'songtexts-theme';
+
+function getInitialTheme(): Theme {
+  const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+
+  if (savedTheme === 'light' || savedTheme === 'dark') {
+    return savedTheme;
+  }
+
+  return 'light';
+}
 
 function Navbar() {
   const navigate = useNavigate();
   const isOnline = useOnlineStatus();
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [theme, setTheme] = useState<Theme>(() => getInitialTheme());
+
+  useEffect(() => {
+    UserService.getCurrentUser()
+      .then((user) => setCurrentUser(user))
+      .catch(() => setCurrentUser(null));
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
+  const isAdmin = currentUser?.role === 'ADMIN';
 
   async function handleLogout() {
     try {
@@ -15,6 +47,10 @@ function Navbar() {
     }
 
     navigate('/login', { replace: true });
+  }
+
+  function toggleTheme() {
+    setTheme((currentTheme) => (currentTheme === 'dark' ? 'light' : 'dark'));
   }
 
   return (
@@ -34,21 +70,36 @@ function Navbar() {
         <Link to="/profile" className="navbar-link">
           Profile
         </Link>
+        {isAdmin && (
+          <Link to="/admin" className="navbar-link">
+            Admin Panel
+          </Link>
+        )}
       </div>
 
-      <div
-        className={
-          'connection-indicator ' + (isOnline ? 'is-online' : 'is-offline')
-        }
-        aria-live="polite"
-      >
-        <span className="connection-dot" aria-hidden="true" />
-        <span>{isOnline ? 'Online' : 'Offline (Read-Only)'}</span>
-      </div>
+      {!isOnline && (
+        <div className="connection-indicator is-offline" aria-live="polite">
+          <span className="connection-dot" aria-hidden="true" />
+          <span>Offline (Read-Only)</span>
+        </div>
+      )}
 
-      <button onClick={handleLogout} className="navbar-logout">
-        Logout
-      </button>
+      <div className="navbar-actions">
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="navbar-theme-toggle"
+          aria-label={
+            theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
+          }
+        >
+          {theme === 'dark' ? '☀️' : '🌙'}
+        </button>
+
+        <button onClick={handleLogout} className="navbar-logout">
+          Logout
+        </button>
+      </div>
     </nav>
   );
 }

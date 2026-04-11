@@ -34,11 +34,18 @@ export const HomePage = () => {
     bpmFilter.trim() !== '' ||
     capoFilter.trim() !== '';
 
+  const getActiveTheme = () =>
+    document.documentElement.getAttribute('data-theme') === 'dark'
+      ? 'dark'
+      : 'light';
+
   const warmSongHtmlCache = (list: Song[]) => {
     if (!isOnline) return;
 
+    const theme = getActiveTheme();
+
     for (const song of list) {
-      const viewUrl = `/api/v1/public/song/${encodeURIComponent(String(song.id))}/view/html`;
+      const viewUrl = `/api/v1/public/song/${encodeURIComponent(String(song.id))}/view/html?theme=${theme}`;
       fetch(viewUrl, {
         method: 'GET',
         credentials: 'include',
@@ -48,8 +55,24 @@ export const HomePage = () => {
     }
   };
 
-  const handleClick = (id: number) => {
-    const viewUrl = `/api/v1/public/song/${encodeURIComponent(String(id))}/view/html`;
+  const handleClick = async (id: number) => {
+    const theme = getActiveTheme();
+    const viewUrl = `/api/v1/public/song/${encodeURIComponent(String(id))}/view/html?theme=${theme}`;
+
+    try {
+      const response = await fetch(viewUrl, {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      if (response.status === 401) {
+        globalThis.location.reload();
+        return;
+      }
+    } catch {
+      // Keep previous behavior and still try to open the view.
+    }
+
     globalThis.open(viewUrl, '_blank', 'noopener,noreferrer');
   };
 
@@ -105,6 +128,11 @@ export const HomePage = () => {
   };
 
   const handleDownloadAllSongs = async () => {
+    if (currentUser?.role !== 'ADMIN') {
+      setError('Nur Admins können alle Songtexte herunterladen.');
+      return;
+    }
+
     if (isOffline) {
       setError('Offline-Modus: Download aller Songtexte ist nicht moeglich.');
       return;
@@ -193,7 +221,7 @@ export const HomePage = () => {
       <div className="header-row">
         <h2>Alle Songs</h2>
         <div className="header-actions">
-          {isOnline && (
+          {canAdminEdit && (
             <button
               onClick={handleDownloadAllSongs}
               className="primary-button btn-export"
@@ -309,19 +337,21 @@ export const HomePage = () => {
                   <span className="song-main-text">
                     {song.name} - {song.artist}
                   </span>
-                  <span className="song-tag song-tag-album">
-                    Album: {song.album}
+                  <span className="song-tags-row">
+                    <span className="song-tag song-tag-album">
+                      Album: {song.album}
+                    </span>
+                    {song.bpm === null || song.bpm === undefined ? null : (
+                      <span className="song-tag song-tag-bpm">
+                        BPM: {song.bpm}
+                      </span>
+                    )}
+                    {song.capo === null || song.capo === undefined ? null : (
+                      <span className="song-tag song-tag-capo">
+                        Capo: {song.capo}
+                      </span>
+                    )}
                   </span>
-                  {song.bpm === null || song.bpm === undefined ? null : (
-                    <span className="song-tag song-tag-bpm">
-                      BPM: {song.bpm}
-                    </span>
-                  )}
-                  {song.capo === null || song.capo === undefined ? null : (
-                    <span className="song-tag song-tag-capo">
-                      Capo: {song.capo}
-                    </span>
-                  )}
                 </span>
               </button>
 

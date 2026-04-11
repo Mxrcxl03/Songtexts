@@ -26,6 +26,14 @@ public class DocumentExportService {
                     --border-color: #e5e7eb;
                 }
 
+                :root[data-theme='dark'] {
+                    --page-bg: #0f172a;
+                    --card-bg: #1f2937;
+                    --text-color: #f3f4f6;
+                    --muted-color: #d1d5db;
+                    --border-color: #374151;
+                }
+
                 * {
                     box-sizing: border-box;
                 }
@@ -64,13 +72,26 @@ public class DocumentExportService {
                 }
 
                 .song-meta strong {
+                    display: block;
                     color: var(--text-color);
+                }
+
+                .song-meta-value {
+                    display: block;
+                    margin-top: 0.1rem;
                 }
 
                 .song-lyrics {
                     margin-top: 1rem;
                     overflow-x: auto;
                     font-size: clamp(0.72rem, 1.15vw, 1rem);
+                }
+
+                .song-lyrics,
+                .song-lyrics * {
+                    white-space: nowrap;
+                    overflow-wrap: normal;
+                    word-break: normal;
                 }
 
                 .song-lyric-line {
@@ -85,6 +106,22 @@ public class DocumentExportService {
                 .song-content {
                     overflow-x: auto;
                     font-size: clamp(0.72rem, 1.15vw, 1rem);
+                }
+
+                .song-content,
+                .song-content * {
+                    white-space: nowrap !important;
+                    overflow-wrap: normal !important;
+                    word-break: normal !important;
+                }
+
+                .song-lyrics u,
+                .song-content u,
+                .song-lyrics [style*="underline"],
+                .song-content [style*="underline"] {
+                    text-decoration-thickness: max(2px, 0.11em);
+                    text-underline-offset: 0.08em;
+                    text-decoration-skip-ink: none;
                 }
 
                 .song-content pre,
@@ -130,6 +167,13 @@ public class DocumentExportService {
                     .song-lyrics,
                     .song-content {
                         font-size: clamp(0.52rem, 2.35vw, 0.72rem);
+                    }
+
+                    .song-lyrics u,
+                    .song-content u,
+                    .song-lyrics [style*="underline"],
+                    .song-content [style*="underline"] {
+                        text-decoration-thickness: max(2.5px, 0.14em);
                     }
                 }
             </style>
@@ -214,13 +258,17 @@ public class DocumentExportService {
     }
 
     public String renderHtml(Song song) {
+        return renderHtml(song, null);
+    }
+
+    public String renderHtml(Song song, String theme) {
         if (song == null) {
             return "";
         }
 
         List<SongLine> lines = song.getLines();
         if (lines != null && !lines.isEmpty()) {
-            return renderGeneratedHtml(song);
+            return applyThemeToHtml(renderGeneratedHtml(song), theme);
         }
 
         String existingHtml = song.getHtmlContent();
@@ -228,10 +276,36 @@ public class DocumentExportService {
             String normalizedHtml = ensureUtf8Meta(existingHtml);
             normalizedHtml = ensureViewportMeta(normalizedHtml);
             normalizedHtml = ensureResponsiveStyle(normalizedHtml);
-            return injectMetaIntoExistingHtml(normalizedHtml, song);
+            return applyThemeToHtml(injectMetaIntoExistingHtml(normalizedHtml, song), theme);
         }
 
-        return renderGeneratedHtml(song);
+        return applyThemeToHtml(renderGeneratedHtml(song), theme);
+    }
+
+    private String applyThemeToHtml(String html, String theme) {
+        if (html == null || html.isBlank()) {
+            return html;
+        }
+
+        if (!"dark".equalsIgnoreCase(theme) && !"light".equalsIgnoreCase(theme)) {
+            return html;
+        }
+
+        String normalizedTheme = theme.toLowerCase();
+
+        if (html.matches("(?is).*<html[^>]*data-theme\\s*=\\s*['\"][^'\"]+['\"][^>]*>.*")) {
+            return html.replaceFirst(
+                    "(?is)(<html[^>]*?)\\sdata-theme\\s*=\\s*['\"][^'\"]+['\"]",
+                    "$1 data-theme=\"" + normalizedTheme + "\"");
+        }
+
+        if (html.matches("(?is).*<html(\\s[^>]*)?>.*")) {
+            return html.replaceFirst(
+                    "(?is)<html(\\s[^>]*)?>",
+                    "<html$1 data-theme=\"" + normalizedTheme + "\">");
+        }
+
+        return html;
     }
 
     private String renderGeneratedHtml(Song song) {
@@ -248,13 +322,21 @@ public class DocumentExportService {
         html.append("  <main class=\"song-page\">\n");
         html.append("  <h1 class=\"song-title\">").append(escapeHtml(song.getName())).append("</h1>\n");
         html.append("  <div class=\"song-meta\">\n");
-        html.append("    <p><strong>Artist:</strong> ").append(escapeHtml(song.getArtist())).append("</p>\n");
-        html.append("    <p><strong>Album:</strong> ").append(escapeHtml(song.getAlbum())).append("</p>\n");
+        html.append("    <p><strong>Artist:</strong><span class=\"song-meta-value\">")
+                .append(escapeHtml(song.getArtist()))
+                .append("</span></p>\n");
+        html.append("    <p><strong>Album:</strong><span class=\"song-meta-value\">")
+                .append(escapeHtml(song.getAlbum()))
+                .append("</span></p>\n");
         if (song.getBpm() != null) {
-            html.append("    <p><strong>BPM:</strong> ").append(song.getBpm()).append("</p>\n");
+            html.append("    <p><strong>BPM:</strong><span class=\"song-meta-value\">")
+                    .append(song.getBpm())
+                    .append("</span></p>\n");
         }
         if (song.getCapo() != null) {
-            html.append("    <p><strong>Capo:</strong> ").append(song.getCapo()).append("</p>\n");
+            html.append("    <p><strong>Capo:</strong><span class=\"song-meta-value\">")
+                    .append(song.getCapo())
+                    .append("</span></p>\n");
         }
         html.append("  </div>\n");
         html.append("  <div class=\"song-lyrics\">\n");
@@ -320,15 +402,21 @@ public class DocumentExportService {
     private String buildMetaBlock(Song song) {
         StringBuilder meta = new StringBuilder();
         meta.append("<div class=\"song-meta\">\n");
-        meta.append("  <p><strong>Artist:</strong> ").append(escapeHtml(song.getArtist()))
-                .append("</p>\n");
-        meta.append("  <p><strong>Album:</strong> ").append(escapeHtml(song.getAlbum()))
-                .append("</p>\n");
+        meta.append("  <p><strong>Artist:</strong><span class=\"song-meta-value\">")
+                .append(escapeHtml(song.getArtist()))
+                .append("</span></p>\n");
+        meta.append("  <p><strong>Album:</strong><span class=\"song-meta-value\">")
+                .append(escapeHtml(song.getAlbum()))
+                .append("</span></p>\n");
         if (song.getBpm() != null) {
-            meta.append("  <p><strong>BPM:</strong> ").append(song.getBpm()).append("</p>\n");
+            meta.append("  <p><strong>BPM:</strong><span class=\"song-meta-value\">")
+                    .append(song.getBpm())
+                    .append("</span></p>\n");
         }
         if (song.getCapo() != null) {
-            meta.append("  <p><strong>Capo:</strong> ").append(song.getCapo()).append("</p>\n");
+            meta.append("  <p><strong>Capo:</strong><span class=\"song-meta-value\">")
+                    .append(song.getCapo())
+                    .append("</span></p>\n");
         }
         meta.append("</div>");
         return meta.toString();
@@ -360,7 +448,9 @@ public class DocumentExportService {
         }
 
         if (html.contains("songtexts-responsive-style")) {
-            return html;
+            return html.replaceAll(
+                    "(?is)<style[^>]*id\\s*=\\s*['\\\"]songtexts-responsive-style['\\\"][^>]*>.*?</style>",
+                    RESPONSIVE_SONG_STYLE);
         }
 
         int headEnd = indexOfIgnoreCase(html, "</head>");

@@ -1,6 +1,8 @@
 package com.example.backend.auth.service;
 
 import com.example.backend.auth.domain.RefreshToken;
+import com.example.backend.auth.domain.RegistrationRequest;
+import com.example.backend.auth.domain.RegistrationRequestStatus;
 import com.example.backend.auth.api.dto.LoginRequest;
 import com.example.backend.auth.api.dto.RegisterRequest;
 import com.example.backend.auth.error.TokenRefreshException;
@@ -16,6 +18,7 @@ import org.springframework.security.core.Authentication;
 import com.example.backend.security.jwt.JwtService;
 import com.example.backend.user.domain.Role;
 import com.example.backend.user.domain.User;
+import com.example.backend.auth.persistence.RegistrationRequestRepository;
 import com.example.backend.user.persistence.UserRepository;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -30,6 +33,7 @@ public class AuthenticationService {
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final RefreshTokenService refreshTokenService;
+    private final RegistrationRequestRepository registrationRequestRepository;
 
     public ResponseEntity<?> login(LoginRequest loginRequest) {
         Authentication authentication = authenticationManager.authenticate(
@@ -57,15 +61,25 @@ public class AuthenticationService {
             return ResponseEntity.badRequest().body("Error: Email is already in use!");
         }
 
-        User user = new User(
+        if (registrationRequestRepository.existsByUsernameAndStatus(registerRequest.getUsername(),
+                RegistrationRequestStatus.PENDING)) {
+            return ResponseEntity.badRequest()
+                    .body("Error: A registration request for this username is already pending!");
+        }
+
+        if (registrationRequestRepository.existsByEmailAndStatus(registerRequest.getEmail(),
+                RegistrationRequestStatus.PENDING)) {
+            return ResponseEntity.badRequest().body("Error: A registration request for this email is already pending!");
+        }
+
+        RegistrationRequest request = new RegistrationRequest(
                 registerRequest.getUsername(),
                 registerRequest.getEmail(),
-                passwordEncoder.encode(registerRequest.getPassword()),
-                Role.USER);
+                passwordEncoder.encode(registerRequest.getPassword()));
 
-        userRepository.save(user);
+        registrationRequestRepository.save(request);
 
-        return ResponseEntity.ok("User registered successfully!");
+        return ResponseEntity.ok("Registration request submitted. Waiting for admin approval.");
     }
 
     public ResponseEntity<Void> logout(User principal) {

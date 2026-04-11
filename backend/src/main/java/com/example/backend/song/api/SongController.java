@@ -167,10 +167,12 @@ public class SongController {
     }
 
     @GetMapping("/{id}/view/html")
-    public ResponseEntity<String> viewAsHtml(@PathVariable Long id) {
+    public ResponseEntity<String> viewAsHtml(
+            @PathVariable Long id,
+            @RequestParam(value = "theme", required = false) String theme) {
         try {
             var song = songService.getSongEntity(id);
-            String htmlContent = documentExportService.renderHtml(song);
+            String htmlContent = documentExportService.renderHtml(song, theme);
             if (htmlContent == null || htmlContent.isBlank()) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
             }

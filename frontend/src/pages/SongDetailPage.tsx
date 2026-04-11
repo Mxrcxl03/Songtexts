@@ -548,13 +548,15 @@ export function SongDetailPage() {
       </div>
 
       <p className="song-meta-field">
-        <strong>Artist:</strong> {song.artist}
+        <strong>Artist:</strong>
+        <span className="song-meta-value">{song.artist}</span>
       </p>
       <p className="song-meta-field">
-        <strong>Album:</strong> {song.album || '—'}
+        <strong>Album:</strong>
+        <span className="song-meta-value">{song.album || '—'}</span>
       </p>
       <p className="song-meta-field">
-        <strong>BPM:</strong>{' '}
+        <strong>BPM:</strong>
         {isEditing ? (
           <input
             type="number"
@@ -564,11 +566,11 @@ export function SongDetailPage() {
             className="text-input meta-number-input"
           />
         ) : (
-          (song.bpm ?? '—')
+          <span className="song-meta-value">{song.bpm ?? '—'}</span>
         )}
       </p>
       <p className="song-meta-field">
-        <strong>Capo:</strong>{' '}
+        <strong>Capo:</strong>
         {isEditing ? (
           <input
             type="number"
@@ -578,7 +580,7 @@ export function SongDetailPage() {
             className="text-input meta-number-input"
           />
         ) : (
-          (song.capo ?? '—')
+          <span className="song-meta-value">{song.capo ?? '—'}</span>
         )}
       </p>
 

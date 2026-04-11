@@ -22,8 +22,9 @@ public class AuthenticationConfig {
     private final UserRepository userRepo;
 
     @Bean
-    public UserDetailsService userDetailsService(){
-        return username -> userRepo.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
+    public UserDetailsService userDetailsService() {
+        return username -> userRepo.findByUsername(username)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
     }
 
     @Bean
