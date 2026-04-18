@@ -9,11 +9,23 @@ export type SongLine = {
 
 export type Song = {
   id: number;
+  runningNumber?: number | null;
   artist: string;
+  interpretVersion?: string | null;
   name: string;
   album: string;
   bpm?: number | null;
   capo?: number | null;
+  language?: string | null;
+  cadence?: string | null;
+  songYear?: number | null;
+  timeSignature?: string | null;
+  lyricist?: string | null;
+  composer?: string | null;
+  producer?: string | null;
+  keyRoot?: string | null;
+  keySuffix?: string | null;
+  play?: string | null;
   lines: SongLine[];
 };
 

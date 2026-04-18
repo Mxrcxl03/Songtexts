@@ -54,6 +54,18 @@ export const approveRegistrationRequest = async (
   return response.data;
 };
 
+export const rejectRegistrationRequest = async (
+  requestId: number
+): Promise<void> => {
+  await api.post(
+    `/admin/registration-requests/${requestId}/reject`,
+    {},
+    {
+      withCredentials: true,
+    }
+  );
+};
+
 const UserService = {
   getUser,
   getAllUsers,
@@ -61,6 +73,7 @@ const UserService = {
   getCurrentUser,
   getPendingRegistrationRequests,
   approveRegistrationRequest,
+  rejectRegistrationRequest,
 };
 
 export default UserService;

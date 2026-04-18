@@ -66,12 +66,30 @@ public class DocumentExportService {
                     margin-bottom: 0.95rem;
                 }
 
-                .song-meta p {
+                .song-meta-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    table-layout: fixed;
+                }
+
+                .song-meta-table,
+                .song-meta-table tr,
+                .song-meta-table td {
+                    border: none;
+                }
+
+                .song-meta-table td {
+                    vertical-align: top;
+                    width: 33.333%;
+                    padding: 0 0.65rem 0.2rem 0;
+                }
+
+                .song-meta-field {
                     margin: 0.15rem 0;
                     color: var(--muted-color);
                 }
 
-                .song-meta strong {
+                .song-meta-field strong {
                     display: block;
                     color: var(--text-color);
                 }
@@ -193,9 +211,53 @@ public class DocumentExportService {
             titleRun.setBold(true);
             titleRun.setFontSize(24);
 
-            // Artist and Album
+            // Interpret (Original) and Album
             XWPFParagraph artistParagraph = document.createParagraph();
-            artistParagraph.createRun().setText("Artist: " + song.getArtist());
+            artistParagraph.createRun().setText("Interpret (Original): " + song.getArtist());
+
+            if (song.getInterpretVersion() != null && !song.getInterpretVersion().isBlank()) {
+                XWPFParagraph interpretVersionParagraph = document.createParagraph();
+                interpretVersionParagraph.createRun().setText("Interpret (Version): " + song.getInterpretVersion());
+            }
+
+            if (song.getSongYear() != null) {
+                XWPFParagraph yearParagraph = document.createParagraph();
+                yearParagraph.createRun().setText("Jahr des Songs: " + song.getSongYear());
+            }
+
+            if (song.getTimeSignature() != null && !song.getTimeSignature().isBlank()) {
+                XWPFParagraph timeSignatureParagraph = document.createParagraph();
+                timeSignatureParagraph.createRun().setText("Taktart: " + song.getTimeSignature());
+            }
+
+            if (song.getLyricist() != null && !song.getLyricist().isBlank()) {
+                XWPFParagraph lyricistParagraph = document.createParagraph();
+                lyricistParagraph.createRun().setText("Text: " + song.getLyricist());
+            }
+
+            if (song.getComposer() != null && !song.getComposer().isBlank()) {
+                XWPFParagraph composerParagraph = document.createParagraph();
+                composerParagraph.createRun().setText("Komponist: " + song.getComposer());
+            }
+
+            if (song.getProducer() != null && !song.getProducer().isBlank()) {
+                XWPFParagraph producerParagraph = document.createParagraph();
+                producerParagraph.createRun().setText("Produzent: " + song.getProducer());
+            }
+
+            if (song.getKeyRoot() != null && !song.getKeyRoot().isBlank()) {
+                XWPFParagraph keyParagraph = document.createParagraph();
+                String keyValue = song.getKeyRoot();
+                if (song.getKeySuffix() != null && !song.getKeySuffix().isBlank()) {
+                    keyValue = keyValue + " (" + song.getKeySuffix() + ")";
+                }
+                keyParagraph.createRun().setText("Key: " + keyValue);
+            }
+
+            if (song.getPlay() != null && !song.getPlay().isBlank()) {
+                XWPFParagraph playParagraph = document.createParagraph();
+                playParagraph.createRun().setText("Play: " + song.getPlay());
+            }
 
             XWPFParagraph albumParagraph = document.createParagraph();
             albumParagraph.createRun().setText("Album: " + song.getAlbum());
@@ -230,7 +292,35 @@ public class DocumentExportService {
 
         StringBuilder content = new StringBuilder();
         content.append(song.getName()).append("\n");
-        content.append("Artist: ").append(song.getArtist()).append("\n");
+        content.append("Interpret (Original): ").append(song.getArtist()).append("\n");
+        if (song.getInterpretVersion() != null && !song.getInterpretVersion().isBlank()) {
+            content.append("Interpret (Version): ").append(song.getInterpretVersion()).append("\n");
+        }
+        if (song.getSongYear() != null) {
+            content.append("Jahr des Songs: ").append(song.getSongYear()).append("\n");
+        }
+        if (song.getTimeSignature() != null && !song.getTimeSignature().isBlank()) {
+            content.append("Taktart: ").append(song.getTimeSignature()).append("\n");
+        }
+        if (song.getLyricist() != null && !song.getLyricist().isBlank()) {
+            content.append("Text: ").append(song.getLyricist()).append("\n");
+        }
+        if (song.getComposer() != null && !song.getComposer().isBlank()) {
+            content.append("Komponist: ").append(song.getComposer()).append("\n");
+        }
+        if (song.getProducer() != null && !song.getProducer().isBlank()) {
+            content.append("Produzent: ").append(song.getProducer()).append("\n");
+        }
+        if (song.getKeyRoot() != null && !song.getKeyRoot().isBlank()) {
+            content.append("Key: ").append(song.getKeyRoot());
+            if (song.getKeySuffix() != null && !song.getKeySuffix().isBlank()) {
+                content.append(" (").append(song.getKeySuffix()).append(")");
+            }
+            content.append("\n");
+        }
+        if (song.getPlay() != null && !song.getPlay().isBlank()) {
+            content.append("Play: ").append(song.getPlay()).append("\n");
+        }
         content.append("Album: ").append(song.getAlbum()).append("\n\n");
 
         for (SongLine line : song.getLines()) {
@@ -322,22 +412,7 @@ public class DocumentExportService {
         html.append("  <main class=\"song-page\">\n");
         html.append("  <h1 class=\"song-title\">").append(escapeHtml(song.getName())).append("</h1>\n");
         html.append("  <div class=\"song-meta\">\n");
-        html.append("    <p><strong>Artist:</strong><span class=\"song-meta-value\">")
-                .append(escapeHtml(song.getArtist()))
-                .append("</span></p>\n");
-        html.append("    <p><strong>Album:</strong><span class=\"song-meta-value\">")
-                .append(escapeHtml(song.getAlbum()))
-                .append("</span></p>\n");
-        if (song.getBpm() != null) {
-            html.append("    <p><strong>BPM:</strong><span class=\"song-meta-value\">")
-                    .append(song.getBpm())
-                    .append("</span></p>\n");
-        }
-        if (song.getCapo() != null) {
-            html.append("    <p><strong>Capo:</strong><span class=\"song-meta-value\">")
-                    .append(song.getCapo())
-                    .append("</span></p>\n");
-        }
+        html.append(buildMetaTable(song, "    "));
         html.append("  </div>\n");
         html.append("  <div class=\"song-lyrics\">\n");
 
@@ -402,24 +477,75 @@ public class DocumentExportService {
     private String buildMetaBlock(Song song) {
         StringBuilder meta = new StringBuilder();
         meta.append("<div class=\"song-meta\">\n");
-        meta.append("  <p><strong>Artist:</strong><span class=\"song-meta-value\">")
-                .append(escapeHtml(song.getArtist()))
-                .append("</span></p>\n");
-        meta.append("  <p><strong>Album:</strong><span class=\"song-meta-value\">")
-                .append(escapeHtml(song.getAlbum()))
-                .append("</span></p>\n");
-        if (song.getBpm() != null) {
-            meta.append("  <p><strong>BPM:</strong><span class=\"song-meta-value\">")
-                    .append(song.getBpm())
-                    .append("</span></p>\n");
-        }
-        if (song.getCapo() != null) {
-            meta.append("  <p><strong>Capo:</strong><span class=\"song-meta-value\">")
-                    .append(song.getCapo())
-                    .append("</span></p>\n");
-        }
+        meta.append(buildMetaTable(song, "  "));
         meta.append("</div>");
         return meta.toString();
+    }
+
+    private String buildMetaTable(Song song, String indent) {
+        StringBuilder meta = new StringBuilder();
+        meta.append(indent).append("<table class=\"song-meta-table\">\n");
+        meta.append(indent).append("  <tr>\n");
+
+        meta.append(indent).append("    <td>\n");
+        appendMetaField(meta, indent + "      ", "Nr.", valueOrDash(song.getRunningNumber()));
+        appendMetaField(meta, indent + "      ", "Titel", valueOrDash(song.getName()));
+        appendMetaField(meta, indent + "      ", "Jahr", valueOrDash(song.getSongYear()));
+        appendMetaField(meta, indent + "      ", "Sprache", valueOrDash(song.getLanguage()));
+        appendMetaField(meta, indent + "      ", "Album", valueOrDash(song.getAlbum()));
+        meta.append(indent).append("    </td>\n");
+
+        meta.append(indent).append("    <td>\n");
+        appendMetaField(meta, indent + "      ", "Key", valueOrDash(buildKey(song)));
+        appendMetaField(meta, indent + "      ", "BPM", valueOrDash(song.getBpm()));
+        appendMetaField(meta, indent + "      ", "Taktart", valueOrDash(song.getTimeSignature()));
+        appendMetaField(meta, indent + "      ", "Capo", valueOrDash(song.getCapo()));
+        appendMetaField(meta, indent + "      ", "Play", valueOrDash(song.getPlay()));
+        meta.append(indent).append("    </td>\n");
+
+        meta.append(indent).append("    <td>\n");
+        appendMetaField(meta, indent + "      ", "Interpret (Original)", valueOrDash(song.getArtist()));
+        appendMetaField(meta, indent + "      ", "Interpret (Version)", valueOrDash(song.getInterpretVersion()));
+        appendMetaField(meta, indent + "      ", "Kadenz", valueOrDash(song.getCadence()));
+        appendMetaField(meta, indent + "      ", "Komponist", valueOrDash(song.getComposer()));
+        appendMetaField(meta, indent + "      ", "Produzent", valueOrDash(song.getProducer()));
+        meta.append(indent).append("    </td>\n");
+
+        meta.append(indent).append("  </tr>\n");
+        meta.append(indent).append("</table>\n");
+        return meta.toString();
+    }
+
+    private void appendMetaField(StringBuilder meta, String indent, String label, String value) {
+        meta.append(indent).append("<p class=\"song-meta-field\"><strong>")
+                .append(escapeHtml(label))
+                .append(":</strong><span class=\"song-meta-value\">")
+                .append(escapeHtml(value))
+                .append("</span></p>\n");
+    }
+
+    private String valueOrDash(Object value) {
+        if (value == null) {
+            return "-";
+        }
+        if (value instanceof String stringValue) {
+            return stringValue.isBlank() ? "-" : stringValue;
+        }
+        return String.valueOf(value);
+    }
+
+    private String buildKey(Song song) {
+        String keyRoot = song.getKeyRoot();
+        if (keyRoot == null || keyRoot.isBlank()) {
+            return "-";
+        }
+
+        String keySuffix = song.getKeySuffix();
+        if (keySuffix == null || keySuffix.isBlank()) {
+            return keyRoot;
+        }
+
+        return keyRoot + " (" + keySuffix + ")";
     }
 
     private String ensureViewportMeta(String html) {

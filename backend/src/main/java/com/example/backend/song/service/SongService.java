@@ -2,9 +2,12 @@ package com.example.backend.song.service;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -33,7 +36,26 @@ public class SongService {
 
     @Transactional
     public SongResponse createSong(SongRequest req) {
-        Song song = new Song(req.getArtist(), req.getName(), req.getAlbum(), req.getBpm(), req.getCapo());
+        ensureRunningNumbersAssigned();
+
+        Song song = new Song(
+                req.getArtist(),
+                req.getName(),
+                req.getAlbum(),
+                req.getBpm(),
+                req.getCapo(),
+                normalizeLanguage(req.getLanguage()),
+                normalizeCadence(req.getCadence()),
+                normalizeInterpretVersion(req.getInterpretVersion()),
+                normalizeSongYear(req.getSongYear()),
+                normalizeTimeSignature(req.getTimeSignature()),
+                normalizeOptionalTag(req.getLyricist()),
+                normalizeOptionalTag(req.getComposer()),
+                normalizeOptionalTag(req.getProducer()),
+                normalizeOptionalTag(req.getKeyRoot()),
+                normalizeOptionalTag(req.getKeySuffix()),
+                normalizeOptionalTag(req.getPlay()));
+        song.setRunningNumber(nextFreeRunningNumber());
 
         List<SongLine> lines = new ArrayList<>();
         int idx = 1;
@@ -64,12 +86,14 @@ public class SongService {
 
     @Transactional
     public List<SongResponse> getAllSongs() {
+        ensureRunningNumbersAssigned();
         return songRepo.findAll(Sort.by("id").descending())
                 .stream().map(this::toResponse).toList();
     }
 
     @Transactional
     public SongResponse getSong(Long id) {
+        ensureRunningNumbersAssigned();
         Song s = findSongOrThrow(id);
         return toResponse(s);
     }
@@ -97,15 +121,28 @@ public class SongService {
 
         return new SongResponse(
                 s.getId(),
+                toRunningNumber(s),
                 s.getArtist(),
                 s.getName(),
                 s.getAlbum(),
                 s.getBpm(),
                 s.getCapo(),
+                s.getLanguage(),
+                s.getCadence(),
+                s.getInterpretVersion(),
+                s.getSongYear(),
+                s.getTimeSignature(),
+                s.getLyricist(),
+                s.getComposer(),
+                s.getProducer(),
+                s.getKeyRoot(),
+                s.getKeySuffix(),
+                s.getPlay(),
                 lrs);
     }
 
     public SongResponse updateSong(Long id, SongRequest request) {
+        ensureRunningNumbersAssigned();
         Song song = findSongOrThrow(id);
         applyBasicUpdates(song, request);
         applyLineUpdates(song, request);
@@ -130,6 +167,17 @@ public class SongService {
         }
         song.setBpm(request.getBpm());
         song.setCapo(request.getCapo());
+        song.setLanguage(normalizeLanguage(request.getLanguage()));
+        song.setCadence(normalizeCadence(request.getCadence()));
+        song.setInterpretVersion(normalizeInterpretVersion(request.getInterpretVersion()));
+        song.setSongYear(normalizeSongYear(request.getSongYear()));
+        song.setTimeSignature(normalizeTimeSignature(request.getTimeSignature()));
+        song.setLyricist(normalizeOptionalTag(request.getLyricist()));
+        song.setComposer(normalizeOptionalTag(request.getComposer()));
+        song.setProducer(normalizeOptionalTag(request.getProducer()));
+        song.setKeyRoot(normalizeOptionalTag(request.getKeyRoot()));
+        song.setKeySuffix(normalizeOptionalTag(request.getKeySuffix()));
+        song.setPlay(normalizeOptionalTag(request.getPlay()));
     }
 
     private void applyLineUpdates(Song song, SongRequest request) {
@@ -227,11 +275,23 @@ public class SongService {
     private SongResponse mapToSongResponse(Song song) {
         return new SongResponse(
                 song.getId(),
+                toRunningNumber(song),
                 song.getArtist(),
                 song.getName(),
                 song.getAlbum(),
                 song.getBpm(),
                 song.getCapo(),
+                song.getLanguage(),
+                song.getCadence(),
+                song.getInterpretVersion(),
+                song.getSongYear(),
+                song.getTimeSignature(),
+                song.getLyricist(),
+                song.getComposer(),
+                song.getProducer(),
+                song.getKeyRoot(),
+                song.getKeySuffix(),
+                song.getPlay(),
                 song.getLines().stream()
                         .sorted(
                                 Comparator
@@ -264,21 +324,170 @@ public class SongService {
             String name,
             String album,
             Integer bpm,
-            Integer capo)
+            Integer capo,
+            String language,
+            String cadence,
+            String interpretVersion,
+            Integer songYear,
+            String timeSignature,
+            String lyricist,
+            String composer,
+            String producer,
+            String keyRoot,
+            String keySuffix,
+            String play)
             throws Exception {
-        Song song = new Song(artist, name, album, bpm, capo);
+        ensureRunningNumbersAssigned();
+
+        Song song = new Song(
+                artist,
+                name,
+                album,
+                bpm,
+                capo,
+                normalizeLanguage(language),
+                normalizeCadence(cadence),
+                normalizeInterpretVersion(interpretVersion),
+                normalizeSongYear(songYear),
+                normalizeTimeSignature(timeSignature),
+                normalizeOptionalTag(lyricist),
+                normalizeOptionalTag(composer),
+                normalizeOptionalTag(producer),
+                normalizeOptionalTag(keyRoot),
+                normalizeOptionalTag(keySuffix),
+                normalizeOptionalTag(play));
+        song.setRunningNumber(nextFreeRunningNumber());
         song.setHtmlContent(documentParserService.parseHtmlFile(file));
 
         Song saved = songRepo.save(song);
         return toResponse(saved);
     }
 
+    private String normalizeLanguage(String language) {
+        if (language == null || language.isBlank()) {
+            return null;
+        }
+
+        String normalized = language.trim().toLowerCase(Locale.ROOT);
+        if (!"deutsch".equals(normalized) && !"englisch".equals(normalized)) {
+            throw new IllegalArgumentException("Sprache muss 'deutsch' oder 'englisch' sein.");
+        }
+
+        return normalized;
+    }
+
+    private String normalizeCadence(String cadence) {
+        if (cadence == null || cadence.isBlank()) {
+            return null;
+        }
+
+        return cadence.trim();
+    }
+
+    private String normalizeInterpretVersion(String interpretVersion) {
+        if (interpretVersion == null || interpretVersion.isBlank()) {
+            return null;
+        }
+
+        return interpretVersion.trim();
+    }
+
+    private Integer normalizeSongYear(Integer songYear) {
+        if (songYear == null) {
+            return null;
+        }
+
+        if (songYear < 0) {
+            throw new IllegalArgumentException("Jahr des Songs muss groesser oder gleich 0 sein.");
+        }
+
+        return songYear;
+    }
+
+    private String normalizeTimeSignature(String timeSignature) {
+        if (timeSignature == null || timeSignature.isBlank()) {
+            return null;
+        }
+
+        return timeSignature.trim();
+    }
+
+    private String normalizeOptionalTag(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+
+        return value.trim();
+    }
+
+    private Long toRunningNumber(Song song) {
+        if (song == null) {
+            return null;
+        }
+
+        return song.getRunningNumber();
+    }
+
+    private void ensureRunningNumbersAssigned() {
+        List<Song> songs = songRepo.findAll(Sort.by("id").ascending());
+        if (songs.isEmpty()) {
+            return;
+        }
+
+        Set<Long> used = new HashSet<>();
+        List<Song> toAssign = new ArrayList<>();
+
+        for (Song song : songs) {
+            Long runningNumber = song.getRunningNumber();
+            boolean isValid = runningNumber != null && runningNumber >= 0 && !used.contains(runningNumber);
+
+            if (isValid) {
+                used.add(runningNumber);
+            } else {
+                toAssign.add(song);
+            }
+        }
+
+        if (toAssign.isEmpty()) {
+            return;
+        }
+
+        long nextCandidate = 0L;
+        for (Song song : toAssign) {
+            while (used.contains(nextCandidate)) {
+                nextCandidate++;
+            }
+
+            song.setRunningNumber(nextCandidate);
+            used.add(nextCandidate);
+            nextCandidate++;
+        }
+
+        songRepo.saveAll(toAssign);
+    }
+
+    private Long nextFreeRunningNumber() {
+        Set<Long> used = songRepo.findAll().stream()
+                .map(Song::getRunningNumber)
+                .filter(n -> n != null && n >= 0)
+                .collect(Collectors.toSet());
+
+        long candidate = 0L;
+        while (used.contains(candidate)) {
+            candidate++;
+        }
+
+        return candidate;
+    }
+
     public Song getSongEntity(Long id) {
+        ensureRunningNumbersAssigned();
         return findSongOrThrow(id);
     }
 
     @Transactional
     public List<Song> getAllSongEntities() {
+        ensureRunningNumbersAssigned();
         return songRepo.findAll(Sort.by("id").descending());
     }
 

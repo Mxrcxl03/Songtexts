@@ -63,6 +63,16 @@ public class RegistrationApprovalService {
         return ResponseEntity.ok(toResponse(request));
     }
 
+    @Transactional
+    public ResponseEntity<?> rejectRequest(Long requestId, User adminUser) {
+        RegistrationRequest request = registrationRequestRepository
+                .findByIdAndStatus(requestId, RegistrationRequestStatus.PENDING)
+                .orElseThrow(() -> new EntityNotFoundException("Registration request not found."));
+
+        registrationRequestRepository.delete(request);
+        return ResponseEntity.noContent().build();
+    }
+
     private RegistrationRequestResponse toResponse(RegistrationRequest request) {
         return RegistrationRequestResponse.builder()
                 .id(request.getId())

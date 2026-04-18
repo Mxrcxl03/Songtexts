@@ -20,24 +20,59 @@ export const HomePage = () => {
   const [busySongId, setBusySongId] = useState<number | null>(null);
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [showFilterPopup, setShowFilterPopup] = useState(false);
+  const [artistOriginalFilter, setArtistOriginalFilter] = useState('');
+  const [interpretVersionFilter, setInterpretVersionFilter] = useState('');
   const [albumFilter, setAlbumFilter] = useState('');
-  const [bpmFilter, setBpmFilter] = useState('');
-  const [capoFilter, setCapoFilter] = useState('');
+  const [languageFilter, setLanguageFilter] = useState('');
+  const [yearFilter, setYearFilter] = useState('');
   const navigate = useNavigate();
+
+  const artistOriginalOptions = Array.from(
+    new Set(songs.map((song) => song.artist).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b));
+
+  const interpretVersionOptions = Array.from(
+    new Set(
+      songs
+        .map((song) => String(song.interpretVersion ?? '').trim())
+        .filter((value) => value !== '')
+    )
+  ).sort((a, b) => a.localeCompare(b));
 
   const albumOptions = Array.from(
     new Set(songs.map((song) => song.album).filter(Boolean))
   ).sort((a, b) => a.localeCompare(b));
 
+  const languageOptions = Array.from(
+    new Set(
+      songs
+        .map((song) => String(song.language ?? '').trim())
+        .filter((value) => value !== '')
+    )
+  ).sort((a, b) => a.localeCompare(b));
+
+  const yearOptions = Array.from(
+    new Set(
+      songs
+        .map((song) => song.songYear)
+        .filter((year): year is number => year !== null && year !== undefined)
+    )
+  ).sort((a, b) => a - b);
+
   const hasActiveTagFilters =
+    artistOriginalFilter.trim() !== '' ||
+    interpretVersionFilter.trim() !== '' ||
     albumFilter.trim() !== '' ||
-    bpmFilter.trim() !== '' ||
-    capoFilter.trim() !== '';
+    languageFilter.trim() !== '' ||
+    yearFilter.trim() !== '';
 
   const getActiveTheme = () =>
     document.documentElement.getAttribute('data-theme') === 'dark'
       ? 'dark'
       : 'light';
+
+  const hasText = (value: string | null | undefined) =>
+    value !== null && value !== undefined && value.trim() !== '';
 
   const warmSongHtmlCache = (list: Song[]) => {
     if (!isOnline) return;
@@ -180,29 +215,59 @@ export const HomePage = () => {
   }, [isOnline]);
 
   useEffect(() => {
-    const q = query.toLowerCase();
+    const q = query.trim().toLowerCase();
+    const numberQuery = q.startsWith('#') ? q.slice(1) : q;
     const f = songs.filter((s) => {
+      const runningNumber = String(s.runningNumber ?? '');
       const matchesQuery =
+        runningNumber.includes(q) ||
+        runningNumber.includes(numberQuery) ||
+        `#${runningNumber}`.includes(q) ||
         s.name.toLowerCase().includes(q) ||
         s.artist.toLowerCase().includes(q) ||
-        s.album.toLowerCase().includes(q) ||
-        String(s.bpm ?? '').includes(q) ||
-        String(s.capo ?? '').includes(q);
+        String(s.interpretVersion ?? '')
+          .toLowerCase()
+          .includes(q) ||
+        s.album.toLowerCase().includes(q);
 
       if (!matchesQuery) return false;
+
+      const matchesArtistOriginal =
+        artistOriginalFilter.trim() === '' ||
+        s.artist.toLowerCase() === artistOriginalFilter.toLowerCase();
+      const matchesInterpretVersion =
+        interpretVersionFilter.trim() === '' ||
+        String(s.interpretVersion ?? '').toLowerCase() ===
+          interpretVersionFilter.toLowerCase();
 
       const matchesAlbum =
         albumFilter.trim() === '' ||
         s.album.toLowerCase() === albumFilter.toLowerCase();
-      const matchesBpm =
-        bpmFilter.trim() === '' || String(s.bpm ?? '') === bpmFilter.trim();
-      const matchesCapo =
-        capoFilter.trim() === '' || String(s.capo ?? '') === capoFilter.trim();
+      const matchesLanguage =
+        languageFilter.trim() === '' ||
+        String(s.language ?? '').toLowerCase() ===
+          languageFilter.trim().toLowerCase();
+      const matchesYear =
+        yearFilter.trim() === '' || String(s.songYear ?? '') === yearFilter;
 
-      return matchesAlbum && matchesBpm && matchesCapo;
+      return (
+        matchesArtistOriginal &&
+        matchesInterpretVersion &&
+        matchesAlbum &&
+        matchesLanguage &&
+        matchesYear
+      );
     });
     setFiltered(f);
-  }, [query, songs, albumFilter, bpmFilter, capoFilter]);
+  }, [
+    query,
+    songs,
+    artistOriginalFilter,
+    interpretVersionFilter,
+    albumFilter,
+    languageFilter,
+    yearFilter,
+  ]);
 
   if (loading) return <div>Lade Songs…</div>;
   if (error) return <div>Fehler: {error}</div>;
@@ -248,7 +313,7 @@ export const HomePage = () => {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Nach Song, Künstler oder Album suchen..."
+          placeholder="Nach Nr, Titel, Interpret Original, Interpret Version oder Album suchen..."
           className="search-input"
         />
 
@@ -263,6 +328,43 @@ export const HomePage = () => {
 
           {showFilterPopup && (
             <div className="filter-popup" aria-label="Tag Filter Popup">
+              <label className="filter-label" htmlFor="artist-original-filter">
+                Interpret Original
+              </label>
+              <select
+                id="artist-original-filter"
+                className="filter-control"
+                value={artistOriginalFilter}
+                onChange={(e) => setArtistOriginalFilter(e.target.value)}
+              >
+                <option value="">Alle</option>
+                {artistOriginalOptions.map((artist) => (
+                  <option key={artist} value={artist}>
+                    {artist}
+                  </option>
+                ))}
+              </select>
+
+              <label
+                className="filter-label"
+                htmlFor="interpret-version-filter"
+              >
+                Interpret Version
+              </label>
+              <select
+                id="interpret-version-filter"
+                className="filter-control"
+                value={interpretVersionFilter}
+                onChange={(e) => setInterpretVersionFilter(e.target.value)}
+              >
+                <option value="">Alle</option>
+                {interpretVersionOptions.map((version) => (
+                  <option key={version} value={version}>
+                    {version}
+                  </option>
+                ))}
+              </select>
+
               <label className="filter-label" htmlFor="album-filter">
                 Album
               </label>
@@ -280,39 +382,49 @@ export const HomePage = () => {
                 ))}
               </select>
 
-              <label className="filter-label" htmlFor="bpm-filter">
-                BPM
+              <label className="filter-label" htmlFor="language-filter">
+                Sprache
               </label>
-              <input
-                id="bpm-filter"
-                type="number"
-                inputMode="numeric"
+              <select
+                id="language-filter"
                 className="filter-control"
-                value={bpmFilter}
-                onChange={(e) => setBpmFilter(e.target.value)}
-                placeholder="z.B. 120"
-              />
+                value={languageFilter}
+                onChange={(e) => setLanguageFilter(e.target.value)}
+              >
+                <option value="">Alle</option>
+                {languageOptions.map((language) => (
+                  <option key={language} value={language}>
+                    {language}
+                  </option>
+                ))}
+              </select>
 
-              <label className="filter-label" htmlFor="capo-filter">
-                Capo
+              <label className="filter-label" htmlFor="year-filter">
+                Jahr
               </label>
-              <input
-                id="capo-filter"
-                type="number"
-                inputMode="numeric"
+              <select
+                id="year-filter"
                 className="filter-control"
-                value={capoFilter}
-                onChange={(e) => setCapoFilter(e.target.value)}
-                placeholder="z.B. 2"
-              />
+                value={yearFilter}
+                onChange={(e) => setYearFilter(e.target.value)}
+              >
+                <option value="">Alle</option>
+                {yearOptions.map((year) => (
+                  <option key={year} value={String(year)}>
+                    {year}
+                  </option>
+                ))}
+              </select>
 
               <button
                 type="button"
                 className="filter-reset-btn"
                 onClick={() => {
+                  setArtistOriginalFilter('');
+                  setInterpretVersionFilter('');
                   setAlbumFilter('');
-                  setBpmFilter('');
-                  setCapoFilter('');
+                  setLanguageFilter('');
+                  setYearFilter('');
                 }}
                 disabled={!hasActiveTagFilters}
               >
@@ -338,19 +450,37 @@ export const HomePage = () => {
                     {song.name} - {song.artist}
                   </span>
                   <span className="song-tags-row">
-                    <span className="song-tag song-tag-album">
-                      Album: {song.album}
-                    </span>
-                    {song.bpm === null || song.bpm === undefined ? null : (
-                      <span className="song-tag song-tag-bpm">
-                        BPM: {song.bpm}
+                    {song.runningNumber !== null &&
+                    song.runningNumber !== undefined ? (
+                      <span className="song-tag song-tag-running-number">
+                        Nr.: {song.runningNumber}
                       </span>
-                    )}
-                    {song.capo === null || song.capo === undefined ? null : (
-                      <span className="song-tag song-tag-capo">
-                        Capo: {song.capo}
+                    ) : null}
+                    {hasText(song.artist) ? (
+                      <span className="song-tag song-tag-interpret">
+                        Interpret: {song.artist}
                       </span>
-                    )}
+                    ) : null}
+                    {hasText(song.interpretVersion) ? (
+                      <span className="song-tag song-tag-interpret-version">
+                        Interpret (Vers.): {song.interpretVersion}
+                      </span>
+                    ) : null}
+                    {hasText(song.album) ? (
+                      <span className="song-tag song-tag-album">
+                        Album: {song.album}
+                      </span>
+                    ) : null}
+                    {song.songYear !== null && song.songYear !== undefined ? (
+                      <span className="song-tag song-tag-year">
+                        Jahr: {song.songYear}
+                      </span>
+                    ) : null}
+                    {hasText(song.language) ? (
+                      <span className="song-tag song-tag-language">
+                        Sprache: {song.language}
+                      </span>
+                    ) : null}
                   </span>
                 </span>
               </button>

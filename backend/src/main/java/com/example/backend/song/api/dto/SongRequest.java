@@ -15,5 +15,16 @@ public class SongRequest {
     private String album;
     private Integer bpm;
     private Integer capo;
+    private String language;
+    private String cadence;
+    private String interpretVersion;
+    private Integer songYear;
+    private String timeSignature;
+    private String lyricist;
+    private String composer;
+    private String producer;
+    private String keyRoot;
+    private String keySuffix;
+    private String play;
     private List<SongLineDTO> lines;
 }

@@ -34,4 +34,11 @@ public class AdminRegistrationController {
             @AuthenticationPrincipal User adminUser) {
         return registrationApprovalService.approveRequest(requestId, adminUser);
     }
+
+    @PostMapping("/{id}/reject")
+    public ResponseEntity<?> rejectRequest(
+            @PathVariable("id") Long requestId,
+            @AuthenticationPrincipal User adminUser) {
+        return registrationApprovalService.rejectRequest(requestId, adminUser);
+    }
 }

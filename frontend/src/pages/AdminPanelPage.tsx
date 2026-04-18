@@ -10,7 +10,10 @@ export const AdminPanelPage = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [busyRequestId, setBusyRequestId] = useState<number | null>(null);
+  const [busyRequest, setBusyRequest] = useState<{
+    id: number;
+    action: 'approve' | 'reject';
+  } | null>(null);
   const [busyUserId, setBusyUserId] = useState<number | null>(null);
 
   const pendingRequests = useMemo(
@@ -28,7 +31,8 @@ export const AdminPanelPage = () => {
         timeStyle: 'medium',
       }),
       statusLabel: 'AUSSTEHEND',
-      actionType: 'approve' as const,
+      statusClass: 'song-tag-pending' as const,
+      actionType: 'review' as const,
       requestId: request.id,
     }));
 
@@ -38,6 +42,7 @@ export const AdminPanelPage = () => {
       email: user.email,
       timestamp: '-',
       statusLabel: `REGISTRIERT (${user.role})`,
+      statusClass: 'song-tag-capo' as const,
       actionType: 'delete' as const,
       userId: user.id,
       isSelf: currentUser?.id === user.id,
@@ -75,7 +80,7 @@ export const AdminPanelPage = () => {
   }, []);
 
   const handleApprove = async (requestId: number) => {
-    setBusyRequestId(requestId);
+    setBusyRequest({ id: requestId, action: 'approve' });
     setError(null);
 
     try {
@@ -92,7 +97,24 @@ export const AdminPanelPage = () => {
         e?.response?.data?.message ?? e?.message ?? 'Freigabe fehlgeschlagen.';
       setError(message);
     } finally {
-      setBusyRequestId(null);
+      setBusyRequest(null);
+    }
+  };
+
+  const handleReject = async (requestId: number) => {
+    setBusyRequest({ id: requestId, action: 'reject' });
+    setError(null);
+
+    try {
+      await UserService.rejectRegistrationRequest(requestId);
+      setRequests((prev) => prev.filter((request) => request.id !== requestId));
+      await loadAdminData();
+    } catch (e: any) {
+      const message =
+        e?.response?.data?.message ?? e?.message ?? 'Ablehnung fehlgeschlagen.';
+      setError(message);
+    } finally {
+      setBusyRequest(null);
     }
   };
 
@@ -161,22 +183,35 @@ export const AdminPanelPage = () => {
                   <td>{row.email}</td>
                   <td>{row.timestamp}</td>
                   <td>
-                    <span className="song-tag song-tag-capo">
+                    <span className={`song-tag ${row.statusClass}`}>
                       {row.statusLabel}
                     </span>
                   </td>
                   <td>
-                    {row.actionType === 'approve' &&
+                    {row.actionType === 'review' &&
                       row.requestId !== undefined && (
-                        <button
-                          className="song-small-btn btn-overwrite"
-                          onClick={() => handleApprove(row.requestId!)}
-                          disabled={busyRequestId === row.requestId}
-                        >
-                          {busyRequestId === row.requestId
-                            ? 'Speichert...'
-                            : 'Akzeptieren'}
-                        </button>
+                        <div className="button-row">
+                          <button
+                            className="song-small-btn btn-overwrite"
+                            onClick={() => handleApprove(row.requestId!)}
+                            disabled={busyRequest?.id === row.requestId}
+                          >
+                            {busyRequest?.id === row.requestId &&
+                            busyRequest.action === 'approve'
+                              ? 'Speichert...'
+                              : 'Akzeptieren'}
+                          </button>
+                          <button
+                            className="song-small-btn btn-delete"
+                            onClick={() => handleReject(row.requestId!)}
+                            disabled={busyRequest?.id === row.requestId}
+                          >
+                            {busyRequest?.id === row.requestId &&
+                            busyRequest.action === 'reject'
+                              ? 'Lehnt ab...'
+                              : 'Ablehnen'}
+                          </button>
+                        </div>
                       )}
                     {row.actionType === 'delete' &&
                       row.userId !== undefined && (

@@ -117,6 +117,11 @@ body {
   color: var(--text-muted);
 }
 
+.required-asterisk {
+  color: #dc2626;
+  font-weight: 700;
+}
+
 .text-input {
   width: 100%;
   border: 1px solid var(--border-input);
@@ -390,21 +395,93 @@ body {
   white-space: nowrap;
   overflow-wrap: normal;
   word-break: keep-all;
+  border: 1px solid rgba(17, 24, 39, 0.22);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.song-tag-title {
+  background-color: #334155;
+  color: #f8fafc;
+}
+
+.song-tag-running-number {
+  background-color: #7c3aed;
+  color: #ffffff;
 }
 
 .song-tag-album {
-  background-color: #fde68a;
-  color: #78350f;
+  background-color: #d97706;
+  color: #ffffff;
 }
 
 .song-tag-bpm {
-  background-color: #bfdbfe;
-  color: #1e3a8a;
+  background-color: #2563eb;
+  color: #ffffff;
 }
 
 .song-tag-capo {
-  background-color: #bbf7d0;
-  color: #14532d;
+  background-color: #16a34a;
+  color: #ffffff;
+}
+
+.song-tag-pending {
+  background-color: #facc15;
+  color: #ffffff;
+}
+
+.song-tag-language {
+  background-color: #dc2626;
+  color: #ffffff;
+}
+
+.song-tag-cadence {
+  background-color: #65a30d;
+  color: #ffffff;
+}
+
+.song-tag-year {
+  background-color: #0891b2;
+  color: #ffffff;
+}
+
+.song-tag-time-signature {
+  background-color: #db2777;
+  color: #ffffff;
+}
+
+.song-tag-interpret {
+  background-color: #b45309;
+  color: #ffffff;
+}
+
+.song-tag-interpret-version {
+  background-color: #4338ca;
+  color: #ffffff;
+}
+
+.song-tag-lyricist {
+  background-color: #ea580c;
+  color: #ffffff;
+}
+
+.song-tag-composer {
+  background-color: #0f766e;
+  color: #ffffff;
+}
+
+.song-tag-producer {
+  background-color: #a21caf;
+  color: #ffffff;
+}
+
+.song-tag-key {
+  background-color: #111827;
+  color: #ffffff;
+}
+
+.song-tag-play {
+  background-color: #be123c;
+  color: #ffffff;
 }
 
 .song-item-actions {

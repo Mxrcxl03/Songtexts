@@ -19,8 +19,38 @@ public class Song {
     @EqualsAndHashCode.Include
     private Long id;
 
+    @Column(name = "running_number", unique = true)
+    private Long runningNumber;
+
     @Column(nullable = false)
     private String artist;
+
+    @Column
+    private String interpretVersion;
+
+    @Column
+    private Integer songYear;
+
+    @Column
+    private String timeSignature;
+
+    @Column
+    private String lyricist;
+
+    @Column
+    private String composer;
+
+    @Column
+    private String producer;
+
+    @Column
+    private String keyRoot;
+
+    @Column
+    private String keySuffix;
+
+    @Column
+    private String play;
 
     @Column(nullable = false)
     private String name;
@@ -33,6 +63,12 @@ public class Song {
 
     @Column
     private Integer capo;
+
+    @Column
+    private String language;
+
+    @Column
+    private String cadence;
 
     @Lob
     @Column(name = "html_content", columnDefinition = "TEXT")
@@ -48,10 +84,23 @@ public class Song {
         this.album = album;
     }
 
-    public Song(String artist, String name, String album, Integer bpm, Integer capo) {
+    public Song(String artist, String name, String album, Integer bpm, Integer capo, String language, String cadence,
+            String interpretVersion, Integer songYear, String timeSignature, String lyricist, String composer,
+            String producer, String keyRoot, String keySuffix, String play) {
         this(artist, name, album);
         this.bpm = bpm;
         this.capo = capo;
+        this.language = language;
+        this.cadence = cadence;
+        this.interpretVersion = interpretVersion;
+        this.songYear = songYear;
+        this.timeSignature = timeSignature;
+        this.lyricist = lyricist;
+        this.composer = composer;
+        this.producer = producer;
+        this.keyRoot = keyRoot;
+        this.keySuffix = keySuffix;
+        this.play = play;
     }
 
     public Song(String artist, String name, String album, List<SongLine> lines) {
@@ -59,8 +108,12 @@ public class Song {
         setLines(lines);
     }
 
-    public Song(String artist, String name, String album, Integer bpm, Integer capo, List<SongLine> lines) {
-        this(artist, name, album, bpm, capo);
+    public Song(String artist, String name, String album, Integer bpm, Integer capo, String language, String cadence,
+            String interpretVersion, Integer songYear, String timeSignature, String lyricist, String composer,
+            String producer, String keyRoot, String keySuffix, String play,
+            List<SongLine> lines) {
+        this(artist, name, album, bpm, capo, language, cadence, interpretVersion, songYear, timeSignature, lyricist,
+                composer, producer, keyRoot, keySuffix, play);
         setLines(lines);
     }
 

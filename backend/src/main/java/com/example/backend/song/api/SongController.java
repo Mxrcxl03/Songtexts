@@ -69,9 +69,37 @@ public class SongController {
             @RequestParam("name") String name,
             @RequestParam("album") String album,
             @RequestParam(value = "bpm", required = false) Integer bpm,
-            @RequestParam(value = "capo", required = false) Integer capo) {
+            @RequestParam(value = "capo", required = false) Integer capo,
+            @RequestParam(value = "language", required = false) String language,
+            @RequestParam(value = "cadence", required = false) String cadence,
+            @RequestParam(value = "interpretVersion", required = false) String interpretVersion,
+            @RequestParam(value = "songYear", required = false) Integer songYear,
+            @RequestParam(value = "timeSignature", required = false) String timeSignature,
+            @RequestParam(value = "lyricist", required = false) String lyricist,
+            @RequestParam(value = "composer", required = false) String composer,
+            @RequestParam(value = "producer", required = false) String producer,
+            @RequestParam(value = "keyRoot", required = false) String keyRoot,
+            @RequestParam(value = "keySuffix", required = false) String keySuffix,
+            @RequestParam(value = "play", required = false) String play) {
         try {
-            SongResponse song = songService.createSongFromFile(file, artist, name, album, bpm, capo);
+            SongResponse song = songService.createSongFromFile(
+                    file,
+                    artist,
+                    name,
+                    album,
+                    bpm,
+                    capo,
+                    language,
+                    cadence,
+                    interpretVersion,
+                    songYear,
+                    timeSignature,
+                    lyricist,
+                    composer,
+                    producer,
+                    keyRoot,
+                    keySuffix,
+                    play);
             return ResponseEntity.status(HttpStatus.CREATED).body(song);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());

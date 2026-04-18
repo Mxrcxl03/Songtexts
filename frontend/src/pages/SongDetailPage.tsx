@@ -21,6 +21,43 @@ import UserService from '../services/user.service';
 import SongService from '../services/song.service';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 
+const KEY_ROOT_OPTIONS = [
+  'C',
+  'Cm',
+  'C#',
+  'C#m',
+  'Db',
+  'Dbm',
+  'D',
+  'Dm',
+  'D#',
+  'D#m',
+  'Eb',
+  'Ebm',
+  'E',
+  'Em',
+  'F',
+  'Fm',
+  'F#',
+  'F#m',
+  'Gb',
+  'Gbm',
+  'G',
+  'Gm',
+  'G#',
+  'G#m',
+  'Ab',
+  'Abm',
+  'A',
+  'Am',
+  'A#',
+  'A#m',
+  'Bb',
+  'Bbm',
+  'B',
+  'Bm',
+];
+
 export function buildChordAndTextCentered(
   textInput: string | null | undefined,
   ann: LooseChord[] | null | undefined
@@ -296,7 +333,17 @@ export function SongDetailPage() {
           ...data,
           album: (data as any).album ?? null,
           bpm: (data as any).bpm ?? null,
+          songYear: (data as any).songYear ?? null,
+          timeSignature: (data as any).timeSignature ?? null,
           capo: (data as any).capo ?? null,
+          cadence: (data as any).cadence ?? null,
+          interpretVersion: (data as any).interpretVersion ?? null,
+          lyricist: (data as any).lyricist ?? null,
+          composer: (data as any).composer ?? null,
+          producer: (data as any).producer ?? null,
+          keyRoot: (data as any).keyRoot ?? null,
+          keySuffix: (data as any).keySuffix ?? null,
+          play: (data as any).play ?? null,
           lines: Array.isArray((data as any).lines) ? (data as any).lines : [],
         });
       } catch (err) {
@@ -389,13 +436,37 @@ export function SongDetailPage() {
     });
   };
 
-  const handleNumberMetaChange = (field: 'bpm' | 'capo', value: string) => {
+  const handleNumberMetaChange = (
+    field: 'bpm' | 'capo' | 'songYear',
+    value: string
+  ) => {
     if (!song) return;
 
     const parsed = value.trim() === '' ? null : Number.parseInt(value, 10);
     setSong({
       ...song,
       [field]: Number.isNaN(parsed) ? null : parsed,
+    });
+  };
+
+  const handleTextMetaChange = (
+    field:
+      | 'cadence'
+      | 'interpretVersion'
+      | 'timeSignature'
+      | 'lyricist'
+      | 'composer'
+      | 'producer'
+      | 'keyRoot'
+      | 'keySuffix'
+      | 'play',
+    value: string
+  ) => {
+    if (!song) return;
+
+    setSong({
+      ...song,
+      [field]: value,
     });
   };
 
@@ -515,7 +586,9 @@ export function SongDetailPage() {
       )}
 
       <div className="header-row">
-        <h2 className="no-margin">{song.name}</h2>
+        <h2 className="no-margin">
+          #{song.runningNumber ?? 0} {song.name}
+        </h2>
         <div className="header-actions">
           <button
             onClick={handleViewHtml}
@@ -547,9 +620,127 @@ export function SongDetailPage() {
         </div>
       </div>
 
+      <div className="song-tags-row">
+        <span className="song-tag song-tag-title">
+          #{song.runningNumber ?? 0}
+        </span>
+        <span className="song-tag song-tag-title">{song.name}</span>
+      </div>
+
       <p className="song-meta-field">
-        <strong>Artist:</strong>
+        <strong>Interpret (Original):</strong>
         <span className="song-meta-value">{song.artist}</span>
+      </p>
+      <p className="song-meta-field">
+        <strong>Interpret (Version):</strong>
+        {isEditing ? (
+          <input
+            type="text"
+            value={song.interpretVersion ?? ''}
+            onChange={(e) =>
+              handleTextMetaChange('interpretVersion', e.target.value)
+            }
+            className="text-input meta-number-input"
+          />
+        ) : (
+          <span className="song-meta-value">
+            {song.interpretVersion ?? '—'}
+          </span>
+        )}
+      </p>
+      <p className="song-meta-field">
+        <strong>Text:</strong>
+        {isEditing ? (
+          <input
+            type="text"
+            value={song.lyricist ?? ''}
+            onChange={(e) => handleTextMetaChange('lyricist', e.target.value)}
+            className="text-input meta-number-input"
+          />
+        ) : (
+          <span className="song-meta-value">{song.lyricist ?? '—'}</span>
+        )}
+      </p>
+      <p className="song-meta-field">
+        <strong>Komponist:</strong>
+        {isEditing ? (
+          <input
+            type="text"
+            value={song.composer ?? ''}
+            onChange={(e) => handleTextMetaChange('composer', e.target.value)}
+            className="text-input meta-number-input"
+          />
+        ) : (
+          <span className="song-meta-value">{song.composer ?? '—'}</span>
+        )}
+      </p>
+      <p className="song-meta-field">
+        <strong>Produzent:</strong>
+        {isEditing ? (
+          <input
+            type="text"
+            value={song.producer ?? ''}
+            onChange={(e) => handleTextMetaChange('producer', e.target.value)}
+            className="text-input meta-number-input"
+          />
+        ) : (
+          <span className="song-meta-value">{song.producer ?? '—'}</span>
+        )}
+      </p>
+      <p className="song-meta-field">
+        <strong>Key:</strong>
+        {isEditing ? (
+          <span
+            className="song-meta-value"
+            style={{ display: 'inline-flex', gap: '0.5rem' }}
+          >
+            <select
+              value={song.keyRoot ?? ''}
+              onChange={(e) => handleTextMetaChange('keyRoot', e.target.value)}
+              className="text-input meta-number-input"
+            >
+              <option value="">Keine Angabe</option>
+              {KEY_ROOT_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={song.keySuffix ?? ''}
+              onChange={(e) =>
+                handleTextMetaChange('keySuffix', e.target.value)
+              }
+              className="text-input meta-number-input"
+              placeholder="z. B. -, ####, bbb"
+            />
+          </span>
+        ) : (
+          <span className="song-meta-value">
+            {song.keyRoot ?? '—'}
+            {song.keyRoot && song.keySuffix ? ` (${song.keySuffix})` : ''}
+          </span>
+        )}
+      </p>
+      <p className="song-meta-field">
+        <strong>Play:</strong>
+        {isEditing ? (
+          <select
+            value={song.play ?? ''}
+            onChange={(e) => handleTextMetaChange('play', e.target.value)}
+            className="text-input meta-number-input"
+          >
+            <option value="">Keine Angabe</option>
+            {KEY_ROOT_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="song-meta-value">{song.play ?? '—'}</span>
+        )}
       </p>
       <p className="song-meta-field">
         <strong>Album:</strong>
@@ -570,6 +761,37 @@ export function SongDetailPage() {
         )}
       </p>
       <p className="song-meta-field">
+        <strong>Jahr des Songs:</strong>
+        {isEditing ? (
+          <input
+            type="number"
+            min={0}
+            value={song.songYear ?? ''}
+            onChange={(e) => handleNumberMetaChange('songYear', e.target.value)}
+            className="text-input meta-number-input"
+            placeholder="z. B. 1998"
+          />
+        ) : (
+          <span className="song-meta-value">{song.songYear ?? '—'}</span>
+        )}
+      </p>
+      <p className="song-meta-field">
+        <strong>Taktart:</strong>
+        {isEditing ? (
+          <input
+            type="text"
+            value={song.timeSignature ?? ''}
+            onChange={(e) =>
+              handleTextMetaChange('timeSignature', e.target.value)
+            }
+            className="text-input meta-number-input"
+            placeholder="z. B. 3/4 oder 4/4"
+          />
+        ) : (
+          <span className="song-meta-value">{song.timeSignature ?? '—'}</span>
+        )}
+      </p>
+      <p className="song-meta-field">
         <strong>Capo:</strong>
         {isEditing ? (
           <input
@@ -581,6 +803,20 @@ export function SongDetailPage() {
           />
         ) : (
           <span className="song-meta-value">{song.capo ?? '—'}</span>
+        )}
+      </p>
+      <p className="song-meta-field">
+        <strong>Kadenz:</strong>
+        {isEditing ? (
+          <input
+            type="text"
+            value={song.cadence ?? ''}
+            onChange={(e) => handleTextMetaChange('cadence', e.target.value)}
+            className="text-input meta-number-input"
+            placeholder="z. B. I-IV-V-I"
+          />
+        ) : (
+          <span className="song-meta-value">{song.cadence ?? '—'}</span>
         )}
       </p>
 
