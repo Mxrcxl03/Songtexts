@@ -11,7 +11,6 @@ import com.example.backend.song.api.dto.SongResponse;
 import com.example.backend.song.domain.Song;
 import com.example.backend.song.service.SongService;
 import com.example.backend.song.service.DocumentExportService;
-import java.nio.charset.StandardCharsets;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpHeaders;
@@ -24,8 +23,6 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.multipart.MultipartFile;
 
 import lombok.RequiredArgsConstructor;
 
@@ -60,68 +57,6 @@ public class SongController {
             @RequestBody SongRequest request) {
         SongResponse updatedSong = songService.updateSong(id, request);
         return ResponseEntity.ok(updatedSong);
-    }
-
-    @PostMapping("/upload")
-    public ResponseEntity<?> uploadFile(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam("artist") String artist,
-            @RequestParam("name") String name,
-            @RequestParam("album") String album,
-            @RequestParam(value = "bpm", required = false) Integer bpm,
-            @RequestParam(value = "capo", required = false) Integer capo,
-            @RequestParam(value = "language", required = false) String language,
-            @RequestParam(value = "cadence", required = false) String cadence,
-            @RequestParam(value = "interpretVersion", required = false) String interpretVersion,
-            @RequestParam(value = "songYear", required = false) Integer songYear,
-            @RequestParam(value = "timeSignature", required = false) String timeSignature,
-            @RequestParam(value = "lyricist", required = false) String lyricist,
-            @RequestParam(value = "composer", required = false) String composer,
-            @RequestParam(value = "producer", required = false) String producer,
-            @RequestParam(value = "keyRoot", required = false) String keyRoot,
-            @RequestParam(value = "keySuffix", required = false) String keySuffix,
-            @RequestParam(value = "play", required = false) String play) {
-        try {
-            SongResponse song = songService.createSongFromFile(
-                    file,
-                    artist,
-                    name,
-                    album,
-                    bpm,
-                    capo,
-                    language,
-                    cadence,
-                    interpretVersion,
-                    songYear,
-                    timeSignature,
-                    lyricist,
-                    composer,
-                    producer,
-                    keyRoot,
-                    keySuffix,
-                    play);
-            return ResponseEntity.status(HttpStatus.CREATED).body(song);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Upload fehlgeschlagen. Bitte pruefe Datei und Eingaben.");
-        }
-    }
-
-    @PostMapping("/{id}/upload")
-    public ResponseEntity<?> overwriteSongFile(
-            @PathVariable Long id,
-            @RequestParam("file") MultipartFile file) {
-        try {
-            SongResponse song = songService.overwriteSongHtml(id, file);
-            return ResponseEntity.ok(song);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Ueberschreiben fehlgeschlagen. Bitte pruefe Datei und Eingaben.");
-        }
     }
 
     @DeleteMapping("/{id}")
@@ -189,24 +124,6 @@ public class SongController {
                             "attachment; filename=\"songtexte-html.zip\"")
                     .contentType(MediaType.APPLICATION_OCTET_STREAM)
                     .body(zip);
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().build();
-        }
-    }
-
-    @GetMapping("/{id}/view/html")
-    public ResponseEntity<String> viewAsHtml(
-            @PathVariable Long id,
-            @RequestParam(value = "theme", required = false) String theme) {
-        try {
-            var song = songService.getSongEntity(id);
-            String htmlContent = documentExportService.renderHtml(song, theme);
-            if (htmlContent == null || htmlContent.isBlank()) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-            }
-            return ResponseEntity.ok()
-                    .contentType(new MediaType("text", "html", StandardCharsets.UTF_8))
-                    .body(htmlContent);
         } catch (Exception e) {
             return ResponseEntity.internalServerError().build();
         }

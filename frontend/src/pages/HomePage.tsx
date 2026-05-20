@@ -66,49 +66,11 @@ export const HomePage = () => {
     languageFilter.trim() !== '' ||
     yearFilter.trim() !== '';
 
-  const getActiveTheme = () =>
-    document.documentElement.getAttribute('data-theme') === 'dark'
-      ? 'dark'
-      : 'light';
-
   const hasText = (value: string | null | undefined) =>
     value !== null && value !== undefined && value.trim() !== '';
 
-  const warmSongHtmlCache = (list: Song[]) => {
-    if (!isOnline) return;
-
-    const theme = getActiveTheme();
-
-    for (const song of list) {
-      const viewUrl = `/api/v1/public/song/${encodeURIComponent(String(song.id))}/view/html?theme=${theme}`;
-      fetch(viewUrl, {
-        method: 'GET',
-        credentials: 'include',
-      }).catch(() => {
-        // Cache warm-up should not block UI when a single fetch fails.
-      });
-    }
-  };
-
-  const handleClick = async (id: number) => {
-    const theme = getActiveTheme();
-    const viewUrl = `/api/v1/public/song/${encodeURIComponent(String(id))}/view/html?theme=${theme}`;
-
-    try {
-      const response = await fetch(viewUrl, {
-        method: 'GET',
-        credentials: 'include',
-      });
-
-      if (response.status === 401) {
-        globalThis.location.reload();
-        return;
-      }
-    } catch {
-      // Keep previous behavior and still try to open the view.
-    }
-
-    globalThis.open(viewUrl, '_blank', 'noopener,noreferrer');
+  const handleClick = (id: number) => {
+    globalThis.open(`/song/${encodeURIComponent(String(id))}`, '_blank', 'noopener,noreferrer');
   };
 
   const loadSongs = () => {
@@ -125,7 +87,6 @@ export const HomePage = () => {
 
         setSongs(list);
         setFiltered(list);
-        warmSongHtmlCache(list);
         setError(null);
       })
       .catch((err) => {

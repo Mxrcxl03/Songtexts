@@ -3,6 +3,7 @@ package com.example.backend.song.service;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -17,7 +18,6 @@ import com.example.backend.song.api.dto.SongRequest;
 import com.example.backend.song.api.dto.SongResponse;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
 import com.example.backend.song.api.dto.ChordAnnotationDTO;
 import com.example.backend.song.domain.SongLine;
@@ -32,7 +32,6 @@ import lombok.RequiredArgsConstructor;
 public class SongService {
 
     private final SongRepository songRepo;
-    private final DocumentParserService documentParserService;
 
     @Transactional
     public SongResponse createSong(SongRequest req) {
@@ -66,10 +65,7 @@ public class SongService {
             SongLine sl = new SongLine(l.getText(), oi);
             sl.setSong(song);
 
-            var chordReqs = Optional.ofNullable(l.getChordAnnotations()).orElse(List.of());
-
-            chordReqs.stream()
-                    .filter(c -> c.getName() != null && !c.getName().isBlank())
+            dedupeAndSortChords(Optional.ofNullable(l.getChordAnnotations()).orElse(List.of())).stream()
                     .sorted(Comparator
                             .comparingInt(ChordAnnotationDTO::getPosition)
                             .thenComparing(ChordAnnotationDTO::getName, String::compareToIgnoreCase))
@@ -226,10 +222,7 @@ public class SongService {
         newline.setText(defaultText(lineReq.getText()));
         newline.setOrderIndex(lineReq.getOrderIndex());
 
-        Optional.ofNullable(lineReq.getChordAnnotations())
-                .orElse(List.of())
-                .stream()
-                .filter(c -> c.getName() != null && !c.getName().isBlank())
+        dedupeAndSortChords(Optional.ofNullable(lineReq.getChordAnnotations()).orElse(List.of())).stream()
                 .sorted(Comparator
                         .comparingInt(ChordAnnotationDTO::getPosition)
                         .thenComparing(ChordAnnotationDTO::getName, String::compareToIgnoreCase))
@@ -255,10 +248,7 @@ public class SongService {
         if (lineReq.getChordAnnotations() != null) {
             existing.getChordAnnotations().clear();
 
-            Optional.ofNullable(lineReq.getChordAnnotations())
-                    .orElse(List.of())
-                    .stream()
-                    .filter(c -> c.getName() != null && !c.getName().isBlank())
+            dedupeAndSortChords(Optional.ofNullable(lineReq.getChordAnnotations()).orElse(List.of())).stream()
                     .sorted(Comparator
                             .comparingInt(ChordAnnotationDTO::getPosition)
                             .thenComparing(ChordAnnotationDTO::getName, String::compareToIgnoreCase))
@@ -315,52 +305,6 @@ public class SongService {
                                 ca.getPosition(),
                                 ca.getName()))
                         .collect(Collectors.toList()));
-    }
-
-    @Transactional
-    public SongResponse createSongFromFile(
-            MultipartFile file,
-            String artist,
-            String name,
-            String album,
-            Integer bpm,
-            Integer capo,
-            String language,
-            String cadence,
-            String interpretVersion,
-            Integer songYear,
-            String timeSignature,
-            String lyricist,
-            String composer,
-            String producer,
-            String keyRoot,
-            String keySuffix,
-            String play)
-            throws Exception {
-        ensureRunningNumbersAssigned();
-
-        Song song = new Song(
-                artist,
-                name,
-                album,
-                bpm,
-                capo,
-                normalizeLanguage(language),
-                normalizeCadence(cadence),
-                normalizeInterpretVersion(interpretVersion),
-                normalizeSongYear(songYear),
-                normalizeTimeSignature(timeSignature),
-                normalizeOptionalTag(lyricist),
-                normalizeOptionalTag(composer),
-                normalizeOptionalTag(producer),
-                normalizeOptionalTag(keyRoot),
-                normalizeOptionalTag(keySuffix),
-                normalizeOptionalTag(play));
-        song.setRunningNumber(nextFreeRunningNumber());
-        song.setHtmlContent(documentParserService.parseHtmlFile(file));
-
-        Song saved = songRepo.save(song);
-        return toResponse(saved);
     }
 
     private String normalizeLanguage(String language) {
@@ -497,11 +441,19 @@ public class SongService {
         songRepo.delete(song);
     }
 
-    @Transactional
-    public SongResponse overwriteSongHtml(Long id, MultipartFile file) throws Exception {
-        Song song = findSongOrThrow(id);
-        song.setHtmlContent(documentParserService.parseHtmlFile(file));
-        Song saved = songRepo.save(song);
-        return toResponse(saved);
+    private List<ChordAnnotationDTO> dedupeAndSortChords(List<ChordAnnotationDTO> chords) {
+        Map<Integer, String> byPosition = new LinkedHashMap<>();
+        for (ChordAnnotationDTO chord : chords) {
+            if (chord == null || chord.getName() == null || chord.getName().isBlank()) {
+                continue;
+            }
+            int position = Math.max(0, chord.getPosition());
+            byPosition.put(position, chord.getName().trim());
+        }
+
+        return byPosition.entrySet().stream()
+                .map(entry -> new ChordAnnotationDTO(entry.getKey(), entry.getValue()))
+                .sorted(Comparator.comparingInt(ChordAnnotationDTO::getPosition))
+                .toList();
     }
 }

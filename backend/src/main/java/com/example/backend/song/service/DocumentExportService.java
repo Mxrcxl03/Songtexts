@@ -10,6 +10,8 @@ import org.springframework.stereotype.Service;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -42,7 +44,7 @@ public class DocumentExportService {
                     margin: 0;
                     background: var(--page-bg);
                     color: var(--text-color);
-                    font-family: Arial, sans-serif;
+                    font-family: Courier New, monospace !important;
                     line-height: 1.5;
                 }
 
@@ -119,6 +121,11 @@ public class DocumentExportService {
                     overflow-wrap: normal;
                     word-break: normal;
                     min-width: max-content;
+                }
+
+                .song-chord-line {
+                    color: #d00000;
+                    font-weight: 700;
                 }
 
                 .song-content {
@@ -265,8 +272,13 @@ public class DocumentExportService {
             // Empty line
             document.createParagraph();
 
-            // Song lyrics
+            // Song lyrics with positioned chord rows
             for (SongLine line : song.getLines()) {
+                String chordLine = buildChordLine(line);
+                if (!chordLine.isBlank()) {
+                    XWPFParagraph chordParagraph = document.createParagraph();
+                    chordParagraph.createRun().setText(chordLine);
+                }
                 XWPFParagraph lyricParagraph = document.createParagraph();
                 lyricParagraph.createRun().setText(line.getText());
             }
@@ -324,6 +336,10 @@ public class DocumentExportService {
         content.append("Album: ").append(song.getAlbum()).append("\n\n");
 
         for (SongLine line : song.getLines()) {
+            String chordLine = buildChordLine(line);
+            if (!chordLine.isBlank()) {
+                content.append(chordLine).append("\n");
+            }
             content.append(line.getText()).append("\n");
         }
 
@@ -355,20 +371,6 @@ public class DocumentExportService {
         if (song == null) {
             return "";
         }
-
-        List<SongLine> lines = song.getLines();
-        if (lines != null && !lines.isEmpty()) {
-            return applyThemeToHtml(renderGeneratedHtml(song), theme);
-        }
-
-        String existingHtml = song.getHtmlContent();
-        if (existingHtml != null && !existingHtml.isBlank()) {
-            String normalizedHtml = ensureUtf8Meta(existingHtml);
-            normalizedHtml = ensureViewportMeta(normalizedHtml);
-            normalizedHtml = ensureResponsiveStyle(normalizedHtml);
-            return applyThemeToHtml(injectMetaIntoExistingHtml(normalizedHtml, song), theme);
-        }
-
         return applyThemeToHtml(renderGeneratedHtml(song), theme);
     }
 
@@ -416,9 +418,13 @@ public class DocumentExportService {
         html.append("  </div>\n");
         html.append("  <div class=\"song-lyrics\">\n");
 
-        // Song lyrics - same format as Word export
+        // Song lyrics with positioned chord rows
         for (SongLine line : song.getLines()) {
+            String chordLine = escapeHtml(buildChordLine(line));
             String lineText = escapeHtml(line.getText());
+            if (!chordLine.isBlank()) {
+                html.append("    <p class=\"song-lyric-line song-chord-line\">").append(chordLine).append("</p>\n");
+            }
             if (lineText.isEmpty()) {
                 lineText = "&nbsp;";
             }
@@ -431,6 +437,33 @@ public class DocumentExportService {
         html.append("</html>\n");
 
         return html.toString();
+    }
+
+    private String buildChordLine(SongLine line) {
+        if (line == null || line.getChordAnnotations() == null || line.getChordAnnotations().isEmpty()) {
+            return "";
+        }
+
+        List<String> cells = new ArrayList<>();
+        line.getChordAnnotations().stream()
+                .filter(c -> c != null && c.getName() != null && !c.getName().isBlank())
+                .sorted(Comparator.comparingInt(c -> Math.max(0, c.getPosition())))
+                .forEach(c -> {
+                    int position = Math.max(0, c.getPosition());
+                    String name = c.getName().trim();
+                    while (cells.size() < position + name.length()) {
+                        cells.add(" ");
+                    }
+                    for (int i = 0; i < name.length(); i++) {
+                        cells.set(position + i, String.valueOf(name.charAt(i)));
+                    }
+                });
+
+        StringBuilder out = new StringBuilder();
+        for (String cell : cells) {
+            out.append(cell);
+        }
+        return out.toString();
     }
 
     private String injectMetaIntoExistingHtml(String existingHtml, Song song) {
@@ -573,6 +606,10 @@ public class DocumentExportService {
             return html;
         }
 
+        // Remove any external or existing font-family references so only our
+        // responsive style defines the font-family for the exported HTML.
+        html = stripFontFamilyReferences(html);
+
         if (html.contains("songtexts-responsive-style")) {
             return html.replaceAll(
                     "(?is)<style[^>]*id\\s*=\\s*['\\\"]songtexts-responsive-style['\\\"][^>]*>.*?</style>",
@@ -588,6 +625,37 @@ public class DocumentExportService {
         }
 
         return RESPONSIVE_SONG_STYLE + "\n" + html;
+    }
+
+    /**
+     * Strip font references from HTML so that only the font-family we set remains.
+     * This removes @font-face blocks, font-related <link> tags and any
+     * "font-family" declarations in styles or inline style attributes.
+     */
+    private String stripFontFamilyReferences(String html) {
+        if (html == null || html.isBlank()) {
+            return html;
+        }
+
+        String out = html;
+
+        // Remove @font-face blocks
+        out = out.replaceAll("(?is)@font-face\\s*\\{.*?\\}", "");
+
+        // Remove <link ... href="...fonts..."> or obvious font resource links
+        out = out.replaceAll("(?is)<link[^>]*href\\s*=\\s*['\"][^'\"]*(fonts\\.|fonts/|fonts\\/googleapis|fonts\\.gstatic|\\.woff|\\.ttf|\\.otf|\\.eot)[^'\"]*['\"][^>]*>", "");
+
+        // Remove font-family declarations inside <style> blocks or other CSS
+        out = out.replaceAll("(?is)font-family\\s*:\\s*[^;\\}\n]+;?", "");
+
+        // Remove inline style font-family entries but keep other style properties
+        out = out.replaceAll("(?is)(style\\s*=\\s*['\"][^'\"]*?)font-family\\s*:\\s*[^;'\"]+;?\\s*", "$1");
+
+        // Remove empty style attributes left behind
+        out = out.replaceAll("(?is)\\sstyle\\s*=\\s*(['\"])\\s*\\1", "");
+        out = out.replaceAll("(?is)style\\s*=\\s*(['\"])\\s*\\1", "");
+
+        return out;
     }
 
     private int indexOfIgnoreCase(String value, String token) {

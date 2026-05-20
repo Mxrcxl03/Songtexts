@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router';
 import axios from 'axios';
 import SongService from '../services/song.service';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { LyricsChordEditor } from '../components/LyricsChordEditor';
+import type { SongLine } from '../types/song';
 import '../styles/global.css';
 
 const KEY_ROOT_OPTIONS = [
@@ -42,6 +44,11 @@ const KEY_ROOT_OPTIONS = [
   'Bm',
 ];
 
+const toNullableNumber = (value: string): number | null => {
+  const parsed = value.trim() ? Number.parseInt(value, 10) : null;
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
 export const AddSongPage = () => {
   const isOnline = useOnlineStatus();
   const [artist, setArtist] = useState('');
@@ -60,93 +67,54 @@ export const AddSongPage = () => {
   const [capo, setCapo] = useState('');
   const [language, setLanguage] = useState('');
   const [cadence, setCadence] = useState('');
-  const [file, setFile] = useState<File | null>(null);
+  const [lines, setLines] = useState<SongLine[]>([
+    { orderIndex: 0, text: '', chordAnnotations: [] },
+  ]);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (!selectedFile) {
-      setFile(null);
-      return;
-    }
-
-    const isHtmByName = selectedFile.name.toLowerCase().endsWith('.htm');
-    if (isHtmByName) {
-      setFile(selectedFile);
-    } else {
-      alert('Bitte lade eine .htm Datei hoch');
-      setFile(null);
-    }
-  };
-
-  const handleFileSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!file || !artist || !name || !album) {
-      alert('Bitte alle Felder ausfüllen');
+    if (!artist || !name || !album) {
+      alert('Bitte alle Pflichtfelder ausfuellen');
       return;
     }
 
     try {
       setIsLoading(true);
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('artist', artist);
-      if (interpretVersion.trim()) {
-        formData.append('interpretVersion', interpretVersion.trim());
-      }
-      if (lyricist.trim()) {
-        formData.append('lyricist', lyricist.trim());
-      }
-      if (composer.trim()) {
-        formData.append('composer', composer.trim());
-      }
-      if (producer.trim()) {
-        formData.append('producer', producer.trim());
-      }
-      formData.append('name', name);
-      formData.append('album', album);
-      if (bpm.trim()) {
-        formData.append('bpm', bpm.trim());
-      }
-      if (songYear.trim()) {
-        formData.append('songYear', songYear.trim());
-      }
-      if (timeSignature.trim()) {
-        formData.append('timeSignature', timeSignature.trim());
-      }
-      if (keyRoot.trim()) {
-        formData.append('keyRoot', keyRoot.trim());
-      }
-      if (keySuffix.trim()) {
-        formData.append('keySuffix', keySuffix.trim());
-      }
-      if (play.trim()) {
-        formData.append('play', play.trim());
-      }
-      if (capo.trim()) {
-        formData.append('capo', capo.trim());
-      }
-      if (language.trim()) {
-        formData.append('language', language.trim().toLowerCase());
-      }
-      if (cadence.trim()) {
-        formData.append('cadence', cadence.trim());
-      }
 
-      await SongService.uploadSongFile(formData);
+      await SongService.createSong({
+        artist,
+        interpretVersion: interpretVersion.trim() || null,
+        lyricist: lyricist.trim() || null,
+        composer: composer.trim() || null,
+        producer: producer.trim() || null,
+        name,
+        album,
+        bpm: toNullableNumber(bpm),
+        songYear: toNullableNumber(songYear),
+        timeSignature: timeSignature.trim() || null,
+        keyRoot: keyRoot.trim() || null,
+        keySuffix: keySuffix.trim() || null,
+        play: play.trim() || null,
+        capo: toNullableNumber(capo),
+        language: language.trim() || null,
+        cadence: cadence.trim() || null,
+        lines,
+      });
+
       navigate('/');
     } catch (err) {
-      console.error('Fehler beim Upload:', err);
+      console.error('Fehler beim Speichern:', err);
       if (axios.isAxiosError(err)) {
         const serverMessage =
           typeof err.response?.data === 'string'
             ? err.response.data
             : err.response?.data?.message;
-        alert(serverMessage || 'Fehler beim Hochladen der Datei');
+        alert(serverMessage || 'Fehler beim Speichern');
       } else {
-        alert('Fehler beim Hochladen der Datei');
+        alert('Fehler beim Speichern');
       }
     } finally {
       setIsLoading(false);
@@ -156,9 +124,9 @@ export const AddSongPage = () => {
   if (!isOnline) {
     return (
       <div className="page page-form">
-        <h2>Neuen Song hinzufügen</h2>
+        <h2>Neuen Song hinzufuegen</h2>
         <p className="offline-banner">
-          Offline-Modus aktiv: Neue Songs können nur online erstellt werden.
+          Offline-Modus aktiv: Neue Songs koennen nur online erstellt werden.
         </p>
       </div>
     );
@@ -166,9 +134,9 @@ export const AddSongPage = () => {
 
   return (
     <div className="page page-form">
-      <h2>Neuen Song hinzufügen</h2>
+      <h2>Neuen Song hinzufuegen</h2>
 
-      <form onSubmit={handleFileSubmit} className="stack-form">
+      <form onSubmit={handleSubmit} className="stack-form">
         <div className="form-field">
           <label htmlFor="artist-file">
             Interpret (Original): <span className="required-asterisk">*</span>
@@ -354,26 +322,12 @@ export const AddSongPage = () => {
         </div>
 
         <div className="form-field">
-          <label htmlFor="file-input">
-            .htm-Datei hochladen: <span className="required-asterisk">*</span>
-          </label>
-          <input
-            id="file-input"
-            type="file"
-            accept=".htm,text/html"
-            onChange={handleFileChange}
-            required
-            className="text-input"
-          />
-          {file && <p className="file-hint">Datei ausgewählt: {file.name}</p>}
+          <label>Lyrics & Akkorde</label>
+          <LyricsChordEditor lines={lines} onChange={setLines} disabled={isLoading} />
         </div>
 
-        <button
-          type="submit"
-          disabled={!file || isLoading}
-          className="primary-button btn-confirm"
-        >
-          {isLoading ? 'Wird hochgeladen...' : 'Datei + Tags speichern'}
+        <button type="submit" disabled={isLoading} className="primary-button btn-confirm">
+          {isLoading ? 'Wird gespeichert...' : 'Song speichern'}
         </button>
       </form>
     </div>

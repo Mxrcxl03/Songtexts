@@ -17,8 +17,8 @@ import { PrivateRoute } from './routes/PrivateRoute.tsx';
 import { LogoutPage } from './pages/LogoutPage.tsx';
 import { AddSongPage } from './pages/AddSongPage.tsx';
 import { EditSongPage } from './pages/EditSongPage.tsx';
-import { HtmlPreviewPage } from './pages/HtmlPreviewPage.tsx';
 import { AdminPanelPage } from './pages/AdminPanelPage.tsx';
+import { SongDetailPage } from './pages/SongDetailPage.tsx';
 import Navbar from './components/NavBar.tsx';
 import { RequireAdminRoute } from './routes/RequireAdminRoute.tsx';
 
@@ -97,10 +97,19 @@ function AppLayout() {
         />
 
         <Route
+          path="/song/:id"
+          element={
+            <PrivateRoute>
+              <SongDetailPage />
+            </PrivateRoute>
+          }
+        />
+
+        <Route
           path="/song/:id/view"
           element={
             <PrivateRoute>
-              <HtmlPreviewPage />
+              <SongDetailPage />
             </PrivateRoute>
           }
         />
