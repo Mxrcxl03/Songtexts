@@ -6,6 +6,7 @@ import com.example.backend.auth.domain.RegistrationRequestStatus;
 import com.example.backend.auth.api.dto.LoginRequest;
 import com.example.backend.auth.api.dto.RegisterRequest;
 import com.example.backend.auth.error.TokenRefreshException;
+import com.example.backend.login.service.LoginEventService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
@@ -34,6 +35,7 @@ public class AuthenticationService {
     private final AuthenticationManager authenticationManager;
     private final RefreshTokenService refreshTokenService;
     private final RegistrationRequestRepository registrationRequestRepository;
+    private final LoginEventService loginEventService;
 
     public ResponseEntity<?> login(LoginRequest loginRequest) {
         Authentication authentication = authenticationManager.authenticate(
@@ -41,6 +43,7 @@ public class AuthenticationService {
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
         User user = (User) authentication.getPrincipal();
+        loginEventService.recordSuccessfulLogin(user);
 
         ResponseCookie jwtCookie = jwtService.generateJwtCookie(user);
 

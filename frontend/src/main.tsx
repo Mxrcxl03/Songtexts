@@ -32,12 +32,20 @@ const sendClearSongCache = async () => {
   registration?.waiting?.postMessage(message);
 };
 
-if ('serviceWorker' in navigator) {
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   registerSW({
     immediate: true,
     onRegistered() {
       globalThis.addEventListener('online', sendClearSongCache);
     },
+  });
+}
+
+if (import.meta.env.DEV && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    registrations.forEach((registration) => {
+      registration.unregister();
+    });
   });
 }
 

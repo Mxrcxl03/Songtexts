@@ -13,6 +13,6 @@ import lombok.NoArgsConstructor;
 public class ChordAnnotation {
     @Column(nullable = false)
     private int position;
-    @Column(nullable = false, length = 10)
+    @Column(nullable = false, length = 14)
     private String name;
 }

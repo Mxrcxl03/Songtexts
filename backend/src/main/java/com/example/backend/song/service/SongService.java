@@ -31,6 +31,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class SongService {
 
+    private static final int MAX_CHORD_NAME_LENGTH = 14;
+
     private final SongRepository songRepo;
 
     @Transactional
@@ -447,8 +449,15 @@ public class SongService {
             if (chord == null || chord.getName() == null || chord.getName().isBlank()) {
                 continue;
             }
+
+            String chordName = chord.getName().trim();
+            if (chordName.length() > MAX_CHORD_NAME_LENGTH) {
+                throw new IllegalArgumentException(
+                        "Akkorde duerfen maximal " + MAX_CHORD_NAME_LENGTH + " Zeichen lang sein.");
+            }
+
             int position = Math.max(0, chord.getPosition());
-            byPosition.put(position, chord.getName().trim());
+            byPosition.put(position, chordName);
         }
 
         return byPosition.entrySet().stream()

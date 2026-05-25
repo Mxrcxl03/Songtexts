@@ -2,13 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import UserService from '../services/user.service';
 import type { RegistrationRequest } from '../types/registrationRequest';
 import type { User } from '../types/user';
+import type { LoginEvent } from '../types/loginEvent';
 import '../styles/global.css';
 
 export const AdminPanelPage = () => {
   const [requests, setRequests] = useState<RegistrationRequest[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [loginEvents, setLoginEvents] = useState<LoginEvent[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busyRequest, setBusyRequest] = useState<{
     id: number;
@@ -46,6 +49,7 @@ export const AdminPanelPage = () => {
       actionType: 'delete' as const,
       userId: user.id,
       isSelf: currentUser?.id === user.id,
+      isAdmin: user.role === 'ADMIN',
     }));
 
     return [...pendingRows, ...userRows];
@@ -53,17 +57,20 @@ export const AdminPanelPage = () => {
 
   const loadAdminData = async () => {
     setLoading(true);
+    setHistoryLoading(true);
     setError(null);
 
     try {
-      const [pending, allUsers, me] = await Promise.all([
+      const [pending, allUsers, me, history] = await Promise.all([
         UserService.getPendingRegistrationRequests(),
         UserService.getAllUsers(),
         UserService.getCurrentUser(),
+        UserService.getLoginHistory(),
       ]);
       setRequests(pending);
       setUsers(allUsers);
       setCurrentUser(me);
+      setLoginEvents(history);
     } catch (e: any) {
       const message =
         e?.response?.data?.message ??
@@ -72,6 +79,7 @@ export const AdminPanelPage = () => {
       setError(message);
     } finally {
       setLoading(false);
+      setHistoryLoading(false);
     }
   };
 
@@ -137,6 +145,9 @@ export const AdminPanelPage = () => {
     try {
       await UserService.deleteUserById(user.id);
       setUsers((prev) => prev.filter((item) => item.id !== user.id));
+      setLoginEvents((prev) =>
+        prev.filter((event) => event.userId !== user.id)
+      );
     } catch (e: any) {
       const message =
         e?.response?.data?.message ??
@@ -152,12 +163,17 @@ export const AdminPanelPage = () => {
     <div className="page">
       <div className="header-row">
         <h2>Admin Panel</h2>
-        <button onClick={loadAdminData} className="primary-button btn-edit">
-          Neu laden
+        <button
+          onClick={loadAdminData}
+          className="primary-button btn-edit"
+          title="Neu laden"
+          aria-label="Neu laden"
+        >
+          &#x21bb;
         </button>
       </div>
 
-      {loading && <p>Lade Anfragen und Benutzer...</p>}
+      {loading && <p>Lade Anfragen, Benutzer und Login-Historie...</p>}
       {error && <p className="status-error">{error}</p>}
 
       {!loading && !error && tableRows.length === 0 && (
@@ -215,27 +231,29 @@ export const AdminPanelPage = () => {
                       )}
                     {row.actionType === 'delete' &&
                       row.userId !== undefined && (
-                        <button
-                          className="song-small-btn btn-delete"
-                          onClick={() => {
-                            const user = users.find(
-                              (entry) => entry.id === row.userId
-                            );
-                            if (user) {
-                              handleDeleteUser(user);
+                        !row.isAdmin && (
+                          <button
+                            className="song-small-btn btn-delete"
+                            onClick={() => {
+                              const user = users.find(
+                                (entry) => entry.id === row.userId
+                              );
+                              if (user) {
+                                handleDeleteUser(user);
+                              }
+                            }}
+                            disabled={busyUserId === row.userId || row.isSelf}
+                            title={
+                              row.isSelf
+                                ? 'Eigener Account kann nicht geloescht werden'
+                                : undefined
                             }
-                          }}
-                          disabled={busyUserId === row.userId || row.isSelf}
-                          title={
-                            row.isSelf
-                              ? 'Eigener Account kann nicht geloescht werden'
-                              : undefined
-                          }
-                        >
-                          {busyUserId === row.userId
-                            ? 'Loescht...'
-                            : 'Entfernen'}
-                        </button>
+                          >
+                            {busyUserId === row.userId
+                              ? 'Loescht...'
+                              : 'Entfernen'}
+                          </button>
+                        )
                       )}
                   </td>
                 </tr>
@@ -243,6 +261,48 @@ export const AdminPanelPage = () => {
             </tbody>
           </table>
         </div>
+      )}
+
+      {!loading && !error && (
+        <>
+          <div className="header-row admin-section-header">
+            <h3>Login-Historie</h3>
+          </div>
+
+          {historyLoading && <p>Lade Login-Historie...</p>}
+
+          {!historyLoading && loginEvents.length === 0 && (
+            <p>Keine Login-Eintraege gefunden.</p>
+          )}
+
+          {!historyLoading && loginEvents.length > 0 && (
+            <div className="table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Benutzername</th>
+                    <th>Email</th>
+                    <th>Login-Zeitpunkt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loginEvents.map((event) => (
+                    <tr key={event.id}>
+                      <td>{event.username}</td>
+                      <td>{event.email}</td>
+                      <td>
+                        {new Date(event.loginAt).toLocaleString('de-DE', {
+                          dateStyle: 'short',
+                          timeStyle: 'medium',
+                        })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

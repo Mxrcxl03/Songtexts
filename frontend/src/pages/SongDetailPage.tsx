@@ -8,7 +8,8 @@ import type { User } from '../types/user';
 import UserService from '../services/user.service';
 import SongService from '../services/song.service';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
-import { buildChordLine, LyricsChordEditor } from '../components/LyricsChordEditor';
+import { LyricsChordEditor } from '../components/LyricsChordEditor';
+import { buildChordLine } from '../utils/buildChordLine';
 
 const KEY_ROOT_OPTIONS = [
   'C',

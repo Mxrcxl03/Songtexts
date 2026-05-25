@@ -1,5 +1,6 @@
 import type { User } from '../types/user';
 import type { RegistrationRequest } from '../types/registrationRequest';
+import type { LoginEvent } from '../types/loginEvent';
 import api from './api';
 
 const getUser = () => {
@@ -66,6 +67,14 @@ export const rejectRegistrationRequest = async (
   );
 };
 
+export const getLoginHistory = async (userId?: number): Promise<LoginEvent[]> => {
+  const response = await api.get<LoginEvent[]>('/admin/login-events', {
+    withCredentials: true,
+    params: userId ? { userId } : undefined,
+  });
+  return response.data;
+};
+
 const UserService = {
   getUser,
   getAllUsers,
@@ -74,6 +83,7 @@ const UserService = {
   getPendingRegistrationRequests,
   approveRegistrationRequest,
   rejectRegistrationRequest,
+  getLoginHistory,
 };
 
 export default UserService;

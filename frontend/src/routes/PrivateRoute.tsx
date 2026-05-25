@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { Navigate } from 'react-router';
 import api from '../services/api';
 
 export const PrivateRoute = ({ children }: { children: ReactNode }) => {
@@ -13,6 +14,10 @@ export const PrivateRoute = ({ children }: { children: ReactNode }) => {
 
   if (isAuth === null) {
     return <p>Lädt....</p>;
+  }
+
+  if (!isAuth) {
+    return <Navigate to="/login" replace />;
   }
 
   return children;
