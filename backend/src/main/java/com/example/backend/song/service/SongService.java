@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -13,6 +14,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import com.example.backend.song.domain.Song;
+import com.example.backend.song.domain.SongGenres;
+import com.example.backend.song.domain.SongScales;
 import com.example.backend.song.persistence.SongRepository;
 import com.example.backend.song.api.dto.SongRequest;
 import com.example.backend.song.api.dto.SongResponse;
@@ -32,6 +35,8 @@ import lombok.RequiredArgsConstructor;
 public class SongService {
 
     private static final int MAX_CHORD_NAME_LENGTH = 14;
+    private static final long MIN_RUNNING_NUMBER = 1L;
+    private static final long MAX_RUNNING_NUMBER = 9999L;
 
     private final SongRepository songRepo;
 
@@ -44,7 +49,7 @@ public class SongService {
                 req.getName(),
                 req.getAlbum(),
                 req.getBpm(),
-                req.getCapo(),
+                normalizeCapo(req.getCapo()),
                 normalizeLanguage(req.getLanguage()),
                 normalizeCadence(req.getCadence()),
                 normalizeInterpretVersion(req.getInterpretVersion()),
@@ -57,6 +62,7 @@ public class SongService {
                 normalizeOptionalTag(req.getKeySuffix()),
                 normalizeOptionalTag(req.getPlay()));
         song.setRunningNumber(nextFreeRunningNumber());
+        song.setGenres(normalizeGenres(req.getGenres()));
 
         List<SongLine> lines = new ArrayList<>();
         int idx = 1;
@@ -136,6 +142,7 @@ public class SongService {
                 s.getKeyRoot(),
                 s.getKeySuffix(),
                 s.getPlay(),
+                Optional.ofNullable(s.getGenres()).orElse(List.of()),
                 lrs);
     }
 
@@ -164,7 +171,7 @@ public class SongService {
             song.setAlbum(request.getAlbum());
         }
         song.setBpm(request.getBpm());
-        song.setCapo(request.getCapo());
+        song.setCapo(normalizeCapo(request.getCapo()));
         song.setLanguage(normalizeLanguage(request.getLanguage()));
         song.setCadence(normalizeCadence(request.getCadence()));
         song.setInterpretVersion(normalizeInterpretVersion(request.getInterpretVersion()));
@@ -176,6 +183,7 @@ public class SongService {
         song.setKeyRoot(normalizeOptionalTag(request.getKeyRoot()));
         song.setKeySuffix(normalizeOptionalTag(request.getKeySuffix()));
         song.setPlay(normalizeOptionalTag(request.getPlay()));
+        song.setGenres(normalizeGenres(request.getGenres()));
     }
 
     private void applyLineUpdates(Song song, SongRequest request) {
@@ -284,6 +292,7 @@ public class SongService {
                 song.getKeyRoot(),
                 song.getKeySuffix(),
                 song.getPlay(),
+                Optional.ofNullable(song.getGenres()).orElse(List.of()),
                 song.getLines().stream()
                         .sorted(
                                 Comparator
@@ -314,12 +323,21 @@ public class SongService {
             return null;
         }
 
-        String normalized = language.trim().toLowerCase(Locale.ROOT);
-        if (!"deutsch".equals(normalized) && !"englisch".equals(normalized)) {
-            throw new IllegalArgumentException("Sprache muss 'deutsch' oder 'englisch' sein.");
+        String input = language.trim();
+        String normalized = input.toLowerCase(Locale.ROOT);
+
+        if ("deutsch".equals(normalized) || "englisch".equals(normalized) || "english".equals(normalized)) {
+            return "n.n.";
         }
 
-        return normalized;
+        for (String allowed : SongScales.ALLOWED) {
+            if (allowed.toLowerCase(Locale.ROOT).equals(normalized)) {
+                return allowed;
+            }
+        }
+
+        throw new IllegalArgumentException(
+                "Skala ist ungueltig. Erlaubt sind: " + String.join(", ", SongScales.ALLOWED));
     }
 
     private String normalizeCadence(String cadence) {
@@ -328,6 +346,19 @@ public class SongService {
         }
 
         return cadence.trim();
+    }
+
+    private Integer normalizeCapo(Integer capo) {
+        if (capo == null) {
+            return null;
+        }
+        if (capo == -1) {
+            return -1;
+        }
+        if (capo < 0) {
+            throw new IllegalArgumentException("Capo muss eine Zahl >= 0 oder '-' sein.");
+        }
+        return capo;
     }
 
     private String normalizeInterpretVersion(String interpretVersion) {
@@ -366,6 +397,44 @@ public class SongService {
         return value.trim();
     }
 
+    private List<String> normalizeGenres(List<String> genres) {
+        if (genres == null || genres.isEmpty()) {
+            return List.of();
+        }
+
+        Map<String, String> allowedByNormalized = SongGenres.ALLOWED.stream()
+                .collect(Collectors.toMap(
+                        value -> value.toLowerCase(Locale.ROOT),
+                        value -> value,
+                        (left, right) -> left,
+                        LinkedHashMap::new));
+
+        LinkedHashSet<String> unique = new LinkedHashSet<>();
+        for (String rawGenre : genres) {
+            if (rawGenre == null || rawGenre.isBlank()) {
+                continue;
+            }
+
+            String normalizedKey = rawGenre.trim().toLowerCase(Locale.ROOT);
+            String canonical = allowedByNormalized.get(normalizedKey);
+            if (canonical == null) {
+                throw new IllegalArgumentException(
+                        "Ungueltiges Genre: '"
+                                + rawGenre
+                                + "'. Erlaubt sind nur diese Genres: "
+                                + String.join(", ", SongGenres.ALLOWED));
+            }
+            unique.add(canonical);
+        }
+
+        if (unique.size() > SongGenres.MAX_GENRES_PER_SONG) {
+            throw new IllegalArgumentException(
+                    "Es sind maximal " + SongGenres.MAX_GENRES_PER_SONG + " Genre-Tags pro Song erlaubt.");
+        }
+
+        return List.copyOf(unique);
+    }
+
     private Long toRunningNumber(Song song) {
         if (song == null) {
             return null;
@@ -385,7 +454,10 @@ public class SongService {
 
         for (Song song : songs) {
             Long runningNumber = song.getRunningNumber();
-            boolean isValid = runningNumber != null && runningNumber >= 0 && !used.contains(runningNumber);
+            boolean isValid = runningNumber != null
+                    && runningNumber >= MIN_RUNNING_NUMBER
+                    && runningNumber <= MAX_RUNNING_NUMBER
+                    && !used.contains(runningNumber);
 
             if (isValid) {
                 used.add(runningNumber);
@@ -398,10 +470,14 @@ public class SongService {
             return;
         }
 
-        long nextCandidate = 0L;
+        long nextCandidate = MIN_RUNNING_NUMBER;
         for (Song song : toAssign) {
-            while (used.contains(nextCandidate)) {
+            while (nextCandidate <= MAX_RUNNING_NUMBER && used.contains(nextCandidate)) {
                 nextCandidate++;
+            }
+            if (nextCandidate > MAX_RUNNING_NUMBER) {
+                throw new IllegalStateException(
+                        "Es koennen maximal " + MAX_RUNNING_NUMBER + " Songs angelegt werden.");
             }
 
             song.setRunningNumber(nextCandidate);
@@ -415,12 +491,16 @@ public class SongService {
     private Long nextFreeRunningNumber() {
         Set<Long> used = songRepo.findAll().stream()
                 .map(Song::getRunningNumber)
-                .filter(n -> n != null && n >= 0)
+                .filter(n -> n != null && n >= MIN_RUNNING_NUMBER && n <= MAX_RUNNING_NUMBER)
                 .collect(Collectors.toSet());
 
-        long candidate = 0L;
-        while (used.contains(candidate)) {
+        long candidate = MIN_RUNNING_NUMBER;
+        while (candidate <= MAX_RUNNING_NUMBER && used.contains(candidate)) {
             candidate++;
+        }
+        if (candidate > MAX_RUNNING_NUMBER) {
+            throw new IllegalStateException(
+                    "Es koennen maximal " + MAX_RUNNING_NUMBER + " Songs angelegt werden.");
         }
 
         return candidate;

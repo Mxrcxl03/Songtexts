@@ -24,6 +24,7 @@ export const LoginPage = () => {
     <div className="auth-page">
       <form onSubmit={onSubmit} className="auth-card stack-form">
         <h1 className="auth-title">Login</h1>
+        <p className="auth-subtitle">Login Songtexte</p>
         {err && <p className="status-error">{err}</p>}
         <input
           className="text-input"

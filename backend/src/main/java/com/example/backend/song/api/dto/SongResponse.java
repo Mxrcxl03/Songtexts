@@ -27,5 +27,6 @@ public class SongResponse {
     private String keyRoot;
     private String keySuffix;
     private String play;
+    private List<String> genres = new ArrayList<>();
     private List<SongLineDTO> lines = new ArrayList<>();
 }

@@ -1,76 +1,78 @@
 import '../styles/global.css';
-import { useParams } from 'react-router';
-import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router';
+import { useEffect, useRef, useState } from 'react';
 import api from '../services/api';
 import axios from 'axios';
 import type { Song, SongLine } from '../types/song';
 import type { User } from '../types/user';
 import UserService from '../services/user.service';
-import SongService from '../services/song.service';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
-import { LyricsChordEditor } from '../components/LyricsChordEditor';
 import { buildChordLine } from '../utils/buildChordLine';
+import { getRefrainUnderlineFlags, isSongPartLine } from '../utils/songPart';
 
-const KEY_ROOT_OPTIONS = [
-  'C',
-  'Cm',
-  'C#',
-  'C#m',
-  'Db',
-  'Dbm',
-  'D',
-  'Dm',
-  'D#',
-  'D#m',
-  'Eb',
-  'Ebm',
-  'E',
-  'Em',
-  'F',
-  'Fm',
-  'F#',
-  'F#m',
-  'Gb',
-  'Gbm',
-  'G',
-  'Gm',
-  'G#',
-  'G#m',
-  'Ab',
-  'Abm',
-  'A',
-  'Am',
-  'A#',
-  'A#m',
-  'Bb',
-  'Bbm',
-  'B',
-  'Bm',
-];
+const toDisplayString = (value: string | number | null | undefined): string => {
+  if (value === null || value === undefined) return '';
+  return String(value).trim();
+};
+const toBracketValue = (value: string | number | null | undefined): string => {
+  const display = toDisplayString(value);
+  return `[${display || ' '}]`;
+};
 
-function SongLineViewRow({ line }: Readonly<{ line: SongLine }>) {
+function SongLineViewRow({
+  line,
+  lyricLineNumber,
+  underlineText,
+}: Readonly<{ line: SongLine; lyricLineNumber: number | null; underlineText: boolean }>) {
   const text = line?.text ?? '';
   const chordLine = buildChordLine(text, line?.chordAnnotations ?? []);
+  const songPartLine = isSongPartLine(text);
 
   return (
-    <div className="line-wrapper-word">
-      {chordLine.trim().length > 0 && <pre className="line-chords-word">{chordLine}</pre>}
-      <pre className="line-text-word">{text || '\u00A0'}</pre>
+    <div className="lyrics-editor-textline lyrics-editor-textline-readonly">
+      <span
+        className={
+          songPartLine
+            ? 'lyrics-line-number-static is-song-part-line'
+            : 'lyrics-line-number-static'
+        }
+      >
+        {songPartLine ? '' : lyricLineNumber}
+      </span>
+      <div className="lyrics-line-stack">
+        <div className="lyrics-chord-layer" aria-hidden="true">
+          <pre className="lyrics-line-readonly lyrics-line-readonly-chords">
+            {chordLine.trim().length > 0 ? chordLine : '\u00A0'}
+          </pre>
+        </div>
+        <div
+          className={
+            underlineText
+              ? 'lyrics-text-layer is-refrain-underlined'
+              : 'lyrics-text-layer'
+          }
+        >
+          <pre className="lyrics-line-readonly lyrics-line-readonly-text">{text || '\u00A0'}</pre>
+        </div>
+      </div>
     </div>
   );
 }
 
 export function SongDetailPage() {
+  const AUTO_SCROLL_PX_PER_SECOND = 42;
   const isOnline = useOnlineStatus();
   const isOffline = !isOnline;
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
 
   const [song, setSong] = useState<Song | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [autoScrollActive, setAutoScrollActive] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const autoScrollFrameRef = useRef<number | null>(null);
+  const autoScrollLastTsRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!id) {
@@ -110,74 +112,47 @@ export function SongDetailPage() {
     return () => controller.abort();
   }, [id]);
 
-  const handleNumberMetaChange = (field: 'bpm' | 'capo' | 'songYear', value: string) => {
-    if (!song) return;
-    const parsed = value.trim() === '' ? null : Number.parseInt(value, 10);
-    setSong({ ...song, [field]: Number.isNaN(parsed) ? null : parsed });
-  };
-
-  const handleTextMetaChange = (
-    field:
-      | 'cadence'
-      | 'interpretVersion'
-      | 'timeSignature'
-      | 'lyricist'
-      | 'composer'
-      | 'producer'
-      | 'keyRoot'
-      | 'keySuffix'
-      | 'play',
-    value: string
-  ) => {
-    if (!song) return;
-    setSong({ ...song, [field]: value });
-  };
-
-  const handleToggleEditOrSave = async () => {
-    if (!song) return;
-    if (isOffline) {
-      setError('Offline-Modus: Bearbeiten ist nicht moeglich.');
-      return;
-    }
-    if (!isEditing) {
-      setIsEditing(true);
+  useEffect(() => {
+    if (!autoScrollActive) {
+      if (autoScrollFrameRef.current !== null) {
+        cancelAnimationFrame(autoScrollFrameRef.current);
+        autoScrollFrameRef.current = null;
+      }
+      autoScrollLastTsRef.current = null;
       return;
     }
 
-    try {
-      setSaving(true);
-      setError(null);
-      await api.put(`/public/song/${encodeURIComponent(String(song.id))}`, song);
-      setIsEditing(false);
-    } catch (err) {
-      setError(axios.isAxiosError(err) ? 'Speichern fehlgeschlagen' : 'Unbekannter Fehler');
-    } finally {
-      setSaving(false);
-    }
-  };
+    const step = (timestamp: number) => {
+      const previousTs = autoScrollLastTsRef.current ?? timestamp;
+      const deltaMs = Math.max(0, timestamp - previousTs);
+      autoScrollLastTsRef.current = timestamp;
 
-  const handleExportHtml = async () => {
-    if (!song) return;
-    try {
-      const response = await SongService.exportToHtml(song.id);
-      const url = globalThis.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${song.name}.htm`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      globalThis.URL.revokeObjectURL(url);
-    } catch {
-      setError('Fehler beim Download der HTML-Datei');
-    }
-  };
+      const maxScrollTop = Math.max(
+        0,
+        globalThis.document.documentElement.scrollHeight - globalThis.innerHeight
+      );
+      const currentScrollTop = globalThis.scrollY;
 
-  const handleViewHtml = () => {
-    if (!song) return;
-    const viewUrl = `/song/${encodeURIComponent(String(song.id))}`;
-    window.open(viewUrl, '_blank', 'noopener,noreferrer');
-  };
+      if (currentScrollTop >= maxScrollTop - 1) {
+        setAutoScrollActive(false);
+        return;
+      }
+
+      const pixelsToScroll = (AUTO_SCROLL_PX_PER_SECOND * deltaMs) / 1000;
+      globalThis.scrollTo(0, Math.min(maxScrollTop, currentScrollTop + pixelsToScroll));
+      autoScrollFrameRef.current = requestAnimationFrame(step);
+    };
+
+    autoScrollFrameRef.current = requestAnimationFrame(step);
+
+    return () => {
+      if (autoScrollFrameRef.current !== null) {
+        cancelAnimationFrame(autoScrollFrameRef.current);
+        autoScrollFrameRef.current = null;
+      }
+      autoScrollLastTsRef.current = null;
+    };
+  }, [autoScrollActive]);
 
   if (loading) return <p>Laedt...</p>;
   if (error) return <p style={{ color: 'crimson' }}>Fehler: {error}</p>;
@@ -185,7 +160,37 @@ export function SongDetailPage() {
 
   const isAdmin = currentUser?.role === 'ADMIN';
   const canAdminEdit = isAdmin && isOnline;
-  const buttonLabel = saving ? 'Speichert...' : isEditing ? 'Speichern' : 'Edit';
+  const keyRootDisplay = toDisplayString(song.keyRoot);
+  const keySuffixDisplay = toDisplayString(song.keySuffix);
+  const keyDisplay = [keyRootDisplay, keySuffixDisplay ? `(${keySuffixDisplay})` : '']
+    .filter(Boolean)
+    .join(' ');
+  const playDisplay = toDisplayString(song.play);
+  const capoDisplay = song.capo === -1 ? '-' : toDisplayString(song.capo);
+  const capoWithPlay = [
+    capoDisplay,
+    playDisplay ? `(Play: ${playDisplay})` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const taktartDisplay = [
+    toDisplayString(song.timeSignature),
+    song.bpm !== null && song.bpm !== undefined ? `(${song.bpm} BPM)` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const songNumberDisplay =
+    song.runningNumber === null || song.runningNumber === undefined
+      ? ''
+      : String(song.runningNumber).padStart(4, '0');
+  const genresDisplay = (song.genres ?? []).join(', ');
+  let lyricLineCounter = 0;
+  const lyricLineNumbers = (song.lines ?? []).map((line) => {
+    if (isSongPartLine(line.text ?? '')) return null;
+    lyricLineCounter += 1;
+    return lyricLineCounter;
+  });
+  const refrainUnderlineFlags = getRefrainUnderlineFlags(song.lines ?? []);
 
   return (
     <div className="page">
@@ -193,221 +198,116 @@ export function SongDetailPage() {
 
       <div className="header-row">
         <h2 className="no-margin">
-          #{song.runningNumber ?? 0} {song.name}
+          #{songNumberDisplay || '-'} {song.name}
         </h2>
         <div className="header-actions">
-          <button onClick={handleViewHtml} className="primary-button btn-export" title="Als HTML-Seite anzeigen">
-            HTML
-          </button>
-          <button onClick={handleExportHtml} className="primary-button btn-export" title="Song als HTML downloaden">
-            Download HTML
-          </button>
           {canAdminEdit && (
             <button
-              onClick={handleToggleEditOrSave}
-              disabled={saving}
-              className={'primary-button ' + (isEditing ? 'btn-save' : 'btn-edit')}
+              onClick={() => navigate(`/song/${song.id}/edit`)}
+              className="primary-button btn-edit icon-only-btn"
+              title="Song bearbeiten"
+              aria-label="Song bearbeiten"
             >
-              {buttonLabel}
+              <svg viewBox="0 0 24 24" className="song-action-icon" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a1.003 1.003 0 0 0 0-1.42l-2.5-2.5a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 2-1.66z"
+                />
+              </svg>
             </button>
           )}
         </div>
       </div>
 
-      <p className="song-meta-field">
-        <strong>Interpret (Original):</strong>
-        <span className="song-meta-value">{song.artist}</span>
-      </p>
-      <p className="song-meta-field">
-        <strong>Interpret (Version):</strong>
-        {isEditing ? (
-          <input
-            type="text"
-            value={song.interpretVersion ?? ''}
-            onChange={(e) => handleTextMetaChange('interpretVersion', e.target.value)}
-            className="text-input meta-number-input"
-          />
-        ) : (
-          <span className="song-meta-value">{song.interpretVersion ?? '-'}</span>
-        )}
-      </p>
-      <p className="song-meta-field">
-        <strong>Text:</strong>
-        {isEditing ? (
-          <input
-            type="text"
-            value={song.lyricist ?? ''}
-            onChange={(e) => handleTextMetaChange('lyricist', e.target.value)}
-            className="text-input meta-number-input"
-          />
-        ) : (
-          <span className="song-meta-value">{song.lyricist ?? '-'}</span>
-        )}
-      </p>
-      <p className="song-meta-field">
-        <strong>Komponist:</strong>
-        {isEditing ? (
-          <input
-            type="text"
-            value={song.composer ?? ''}
-            onChange={(e) => handleTextMetaChange('composer', e.target.value)}
-            className="text-input meta-number-input"
-          />
-        ) : (
-          <span className="song-meta-value">{song.composer ?? '-'}</span>
-        )}
-      </p>
-      <p className="song-meta-field">
-        <strong>Produzent:</strong>
-        {isEditing ? (
-          <input
-            type="text"
-            value={song.producer ?? ''}
-            onChange={(e) => handleTextMetaChange('producer', e.target.value)}
-            className="text-input meta-number-input"
-          />
-        ) : (
-          <span className="song-meta-value">{song.producer ?? '-'}</span>
-        )}
-      </p>
-      <p className="song-meta-field">
-        <strong>Key:</strong>
-        {isEditing ? (
-          <span className="song-meta-value" style={{ display: 'inline-flex', gap: '0.5rem' }}>
-            <select
-              value={song.keyRoot ?? ''}
-              onChange={(e) => handleTextMetaChange('keyRoot', e.target.value)}
-              className="text-input meta-number-input"
-            >
-              <option value="">Keine Angabe</option>
-              {KEY_ROOT_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-            <input
-              type="text"
-              value={song.keySuffix ?? ''}
-              onChange={(e) => handleTextMetaChange('keySuffix', e.target.value)}
-              className="text-input meta-number-input"
-            />
-          </span>
-        ) : (
-          <span className="song-meta-value">
-            {song.keyRoot ?? '-'}
-            {song.keyRoot && song.keySuffix ? ` (${song.keySuffix})` : ''}
-          </span>
-        )}
-      </p>
-      <p className="song-meta-field">
-        <strong>Play:</strong>
-        {isEditing ? (
-          <select
-            value={song.play ?? ''}
-            onChange={(e) => handleTextMetaChange('play', e.target.value)}
-            className="text-input meta-number-input"
-          >
-            <option value="">Keine Angabe</option>
-            {KEY_ROOT_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <span className="song-meta-value">{song.play ?? '-'}</span>
-        )}
-      </p>
-      <p className="song-meta-field">
-        <strong>Album:</strong>
-        <span className="song-meta-value">{song.album || '-'}</span>
-      </p>
-      <p className="song-meta-field">
-        <strong>BPM:</strong>
-        {isEditing ? (
-          <input
-            type="number"
-            min={1}
-            value={song.bpm ?? ''}
-            onChange={(e) => handleNumberMetaChange('bpm', e.target.value)}
-            className="text-input meta-number-input"
-          />
-        ) : (
-          <span className="song-meta-value">{song.bpm ?? '-'}</span>
-        )}
-      </p>
-      <p className="song-meta-field">
-        <strong>Jahr des Songs:</strong>
-        {isEditing ? (
-          <input
-            type="number"
-            min={0}
-            value={song.songYear ?? ''}
-            onChange={(e) => handleNumberMetaChange('songYear', e.target.value)}
-            className="text-input meta-number-input"
-          />
-        ) : (
-          <span className="song-meta-value">{song.songYear ?? '-'}</span>
-        )}
-      </p>
-      <p className="song-meta-field">
-        <strong>Taktart:</strong>
-        {isEditing ? (
-          <input
-            type="text"
-            value={song.timeSignature ?? ''}
-            onChange={(e) => handleTextMetaChange('timeSignature', e.target.value)}
-            className="text-input meta-number-input"
-          />
-        ) : (
-          <span className="song-meta-value">{song.timeSignature ?? '-'}</span>
-        )}
-      </p>
-      <p className="song-meta-field">
-        <strong>Capo:</strong>
-        {isEditing ? (
-          <input
-            type="number"
-            min={0}
-            value={song.capo ?? ''}
-            onChange={(e) => handleNumberMetaChange('capo', e.target.value)}
-            className="text-input meta-number-input"
-          />
-        ) : (
-          <span className="song-meta-value">{song.capo ?? '-'}</span>
-        )}
-      </p>
-      <p className="song-meta-field">
-        <strong>Kadenz:</strong>
-        {isEditing ? (
-          <input
-            type="text"
-            value={song.cadence ?? ''}
-            onChange={(e) => handleTextMetaChange('cadence', e.target.value)}
-            className="text-input meta-number-input"
-          />
-        ) : (
-          <span className="song-meta-value">{song.cadence ?? '-'}</span>
-        )}
-      </p>
+      <div className="song-meta-columns" aria-label="Song Metadaten">
+        <div className="song-meta-column">
+          <p className="song-meta-item">
+            <strong className="song-meta-item-label">Song-Nr.:</strong>
+            <span className="song-meta-item-value">{toBracketValue(songNumberDisplay)}</span>
+          </p>
+          <p className="song-meta-item">
+            <strong className="song-meta-item-label">Song-Titel:</strong>
+            <span className="song-meta-item-value">{toBracketValue(song.name)}</span>
+          </p>
+          <p className="song-meta-item">
+            <strong className="song-meta-item-label">Interpret (Original):</strong>
+            <span className="song-meta-item-value">{toBracketValue(song.artist)}</span>
+          </p>
+          <p className="song-meta-item">
+            <strong className="song-meta-item-label">Interpret (Version):</strong>
+            <span className="song-meta-item-value">{toBracketValue(song.interpretVersion)}</span>
+          </p>
+          <p className="song-meta-item">
+            <strong className="song-meta-item-label">Album:</strong>
+            <span className="song-meta-item-value">{toBracketValue(song.album)}</span>
+          </p>
+        </div>
+        <div className="song-meta-column">
+          <p className="song-meta-item">
+            <strong className="song-meta-item-label">Jahr:</strong>
+            <span className="song-meta-item-value">{toBracketValue(song.songYear)}</span>
+          </p>
+          <p className="song-meta-item">
+            <strong className="song-meta-item-label">Komponist:</strong>
+            <span className="song-meta-item-value">{toBracketValue(song.composer)}</span>
+          </p>
+          <p className="song-meta-item">
+            <strong className="song-meta-item-label">Produzent(en):</strong>
+            <span className="song-meta-item-value">{toBracketValue(song.producer)}</span>
+          </p>
+          <p className="song-meta-item">
+            <strong className="song-meta-item-label">Genre:</strong>
+            <span className="song-meta-item-value">{toBracketValue(genresDisplay)}</span>
+          </p>
+        </div>
+        <div className="song-meta-column">
+          <p className="song-meta-item">
+            <strong className="song-meta-item-label">Key:</strong>
+            <span className="song-meta-item-value">{toBracketValue(keyDisplay)}</span>
+          </p>
+          <p className="song-meta-item">
+            <strong className="song-meta-item-label">Skala:</strong>
+            <span className="song-meta-item-value">{toBracketValue(song.language)}</span>
+          </p>
+          <p className="song-meta-item">
+            <strong className="song-meta-item-label">Capo:</strong>
+            <span className="song-meta-item-value">{toBracketValue(capoWithPlay)}</span>
+          </p>
+          <p className="song-meta-item">
+            <strong className="song-meta-item-label">Taktart:</strong>
+            <span className="song-meta-item-value">{toBracketValue(taktartDisplay)}</span>
+          </p>
+          <p className="song-meta-item">
+            <strong className="song-meta-item-label">Kadenz:</strong>
+            <span className="song-meta-item-value">{toBracketValue(song.cadence)}</span>
+          </p>
+        </div>
+      </div>
 
       <h3>Text:</h3>
-      <div className="text-box">
-        {isEditing ? (
-          <LyricsChordEditor
-            lines={song.lines ?? []}
-            onChange={(lines) => setSong({ ...song, lines })}
-            disabled={saving}
-          />
-        ) : (
-          <div>
-            {(song.lines ?? []).map((line, index) => (
-              <SongLineViewRow key={line.id ?? index} line={line} />
-            ))}
-          </div>
-        )}
+      <div className="lyrics-editor-readonly">
+        <div className="textarea-chords lyrics-chord-surface lyrics-chord-surface-readonly">
+          {(song.lines ?? []).map((line, index) => (
+            <SongLineViewRow
+              key={line.id ?? index}
+              line={line}
+              lyricLineNumber={lyricLineNumbers[index]}
+              underlineText={refrainUnderlineFlags[index] ?? false}
+            />
+          ))}
+        </div>
       </div>
+      <button
+        type="button"
+        className={
+          autoScrollActive
+            ? 'song-autoscroll-btn is-active'
+            : 'song-autoscroll-btn'
+        }
+        onClick={() => setAutoScrollActive((current) => !current)}
+      >
+        {autoScrollActive ? 'AutoScroll stoppen' : 'AutoScroll'}
+      </button>
     </div>
   );
 }

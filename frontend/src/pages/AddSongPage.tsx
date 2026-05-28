@@ -4,6 +4,8 @@ import axios from 'axios';
 import SongService from '../services/song.service';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { LyricsChordEditor } from '../components/LyricsChordEditor';
+import { GENRE_OPTIONS, MAX_GENRES_PER_SONG } from '../constants/genres';
+import { SCALE_OPTIONS } from '../constants/scales';
 import type { SongLine } from '../types/song';
 import '../styles/global.css';
 
@@ -49,6 +51,15 @@ const toNullableNumber = (value: string): number | null => {
   return Number.isNaN(parsed) ? null : parsed;
 };
 
+const parseCapoInput = (value: string): number | null | undefined => {
+  const trimmed = value.trim();
+  if (trimmed === '') return null;
+  if (trimmed === '-') return -1;
+  if (!/^\d+$/.test(trimmed)) return undefined;
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isNaN(parsed) ? undefined : parsed;
+};
+
 export const AddSongPage = () => {
   const isOnline = useOnlineStatus();
   const [artist, setArtist] = useState('');
@@ -67,6 +78,7 @@ export const AddSongPage = () => {
   const [capo, setCapo] = useState('');
   const [language, setLanguage] = useState('');
   const [cadence, setCadence] = useState('');
+  const [genres, setGenres] = useState<string[]>([]);
   const [lines, setLines] = useState<SongLine[]>([
     { orderIndex: 0, text: '', chordAnnotations: [] },
   ]);
@@ -83,6 +95,11 @@ export const AddSongPage = () => {
 
     try {
       setIsLoading(true);
+      const parsedCapo = parseCapoInput(capo);
+      if (parsedCapo === undefined) {
+        alert("Capo muss eine Zahl oder '-' sein.");
+        return;
+      }
 
       await SongService.createSong({
         artist,
@@ -98,9 +115,10 @@ export const AddSongPage = () => {
         keyRoot: keyRoot.trim() || null,
         keySuffix: keySuffix.trim() || null,
         play: play.trim() || null,
-        capo: toNullableNumber(capo),
+        capo: parsedCapo,
         language: language.trim() || null,
         cadence: cadence.trim() || null,
+        genres,
         lines,
       });
 
@@ -131,6 +149,19 @@ export const AddSongPage = () => {
       </div>
     );
   }
+
+  const toggleGenre = (genre: string) => {
+    setGenres((current) => {
+      if (current.includes(genre)) {
+        return current.filter((item) => item !== genre);
+      }
+      if (current.length >= MAX_GENRES_PER_SONG) {
+        alert(`Es sind maximal ${MAX_GENRES_PER_SONG} Genre-Tags pro Song erlaubt.`);
+        return current;
+      }
+      return [...current, genre];
+    });
+  };
 
   return (
     <div className="page page-form">
@@ -177,7 +208,7 @@ export const AddSongPage = () => {
           />
         </div>
         <div className="form-field">
-          <label htmlFor="producer-file">Produzent:</label>
+          <label htmlFor="producer-file">Produzent(en):</label>
           <input
             value={producer}
             id="producer-file"
@@ -278,6 +309,7 @@ export const AddSongPage = () => {
             className="text-input"
           >
             <option value="">Keine Angabe</option>
+            <option value="-">-</option>
             {KEY_ROOT_OPTIONS.map((option) => (
               <option key={option} value={option}>
                 {option}
@@ -289,16 +321,14 @@ export const AddSongPage = () => {
           <label htmlFor="capo-file">Capo:</label>
           <input
             id="capo-file"
-            type="number"
-            min={0}
             value={capo}
             onChange={(e) => setCapo(e.target.value)}
-            placeholder="z. B. 2"
+            placeholder="z. B. 2 oder -"
             className="text-input"
           />
         </div>
         <div className="form-field">
-          <label htmlFor="language-file">Sprache:</label>
+          <label htmlFor="language-file">Skala:</label>
           <select
             id="language-file"
             value={language}
@@ -306,8 +336,11 @@ export const AddSongPage = () => {
             className="text-input"
           >
             <option value="">Keine Angabe</option>
-            <option value="deutsch">Deutsch</option>
-            <option value="englisch">Englisch</option>
+            {SCALE_OPTIONS.map((scale) => (
+              <option key={scale} value={scale}>
+                {scale}
+              </option>
+            ))}
           </select>
         </div>
         <div className="form-field">
@@ -319,6 +352,25 @@ export const AddSongPage = () => {
             placeholder="z. B. I-IV-V-I"
             className="text-input"
           />
+        </div>
+        <div className="form-field">
+          <label>
+            Genre (neu): {genres.length}/{MAX_GENRES_PER_SONG} ausgewählt (
+            {GENRE_OPTIONS.length} Genres insgesamt)
+          </label>
+          <div className="genre-checkbox-grid">
+            {GENRE_OPTIONS.map((genre) => (
+              <label key={genre} className="genre-checkbox-item">
+                <input
+                  type="checkbox"
+                  checked={genres.includes(genre)}
+                  onChange={() => toggleGenre(genre)}
+                  disabled={!genres.includes(genre) && genres.length >= MAX_GENRES_PER_SONG}
+                />
+                <span>{genre}</span>
+              </label>
+            ))}
+          </div>
         </div>
 
         <div className="form-field">

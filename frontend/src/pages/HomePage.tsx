@@ -18,12 +18,12 @@ export const HomePage = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [busySongId, setBusySongId] = useState<number | null>(null);
-  const [downloadingAll, setDownloadingAll] = useState(false);
   const [showFilterPopup, setShowFilterPopup] = useState(false);
   const [artistOriginalFilter, setArtistOriginalFilter] = useState('');
   const [interpretVersionFilter, setInterpretVersionFilter] = useState('');
   const [albumFilter, setAlbumFilter] = useState('');
   const [languageFilter, setLanguageFilter] = useState('');
+  const [genreFilter, setGenreFilter] = useState('');
   const [yearFilter, setYearFilter] = useState('');
   const navigate = useNavigate();
 
@@ -59,18 +59,30 @@ export const HomePage = () => {
     )
   ).sort((a, b) => a - b);
 
+  const genreOptions = Array.from(
+    new Set(
+      songs
+        .flatMap((song) => song.genres ?? [])
+        .map((genre) => String(genre).trim())
+        .filter((value) => value !== '')
+    )
+  ).sort((a, b) => a.localeCompare(b));
+
   const hasActiveTagFilters =
     artistOriginalFilter.trim() !== '' ||
     interpretVersionFilter.trim() !== '' ||
     albumFilter.trim() !== '' ||
     languageFilter.trim() !== '' ||
+    genreFilter.trim() !== '' ||
     yearFilter.trim() !== '';
 
-  const hasText = (value: string | null | undefined) =>
-    value !== null && value !== undefined && value.trim() !== '';
+  const toPaddedRunningNumber = (runningNumber: number | null | undefined) =>
+    runningNumber === null || runningNumber === undefined
+      ? ''
+      : String(runningNumber).padStart(4, '0');
 
   const handleClick = (id: number) => {
-    globalThis.open(`/song/${encodeURIComponent(String(id))}`, '_blank', 'noopener,noreferrer');
+    navigate(`/song/${encodeURIComponent(String(id))}`);
   };
 
   const loadSongs = () => {
@@ -123,45 +135,6 @@ export const HomePage = () => {
     }
   };
 
-  const handleDownloadAllSongs = async () => {
-    if (currentUser?.role !== 'ADMIN') {
-      setError('Nur Admins können alle Songtexte herunterladen.');
-      return;
-    }
-
-    if (isOffline) {
-      setError('Offline-Modus: Download aller Songtexte ist nicht moeglich.');
-      return;
-    }
-
-    try {
-      setDownloadingAll(true);
-      setError(null);
-
-      const response = await SongService.exportAllToHtmlZip();
-      const url = globalThis.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', 'songtexte-html.zip');
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      globalThis.URL.revokeObjectURL(url);
-    } catch (err) {
-      if (axios.isAxiosError(err)) {
-        const serverMessage =
-          typeof err.response?.data === 'string'
-            ? err.response.data
-            : err.response?.data?.message;
-        setError(serverMessage || 'Download fehlgeschlagen');
-      } else {
-        setError('Download fehlgeschlagen');
-      }
-    } finally {
-      setDownloadingAll(false);
-    }
-  };
-
   useEffect(() => {
     UserService.getCurrentUser()
       .then((user) => setCurrentUser(user))
@@ -180,10 +153,14 @@ export const HomePage = () => {
     const numberQuery = q.startsWith('#') ? q.slice(1) : q;
     const f = songs.filter((s) => {
       const runningNumber = String(s.runningNumber ?? '');
+      const paddedRunningNumber = toPaddedRunningNumber(s.runningNumber);
       const matchesQuery =
         runningNumber.includes(q) ||
+        paddedRunningNumber.includes(q) ||
         runningNumber.includes(numberQuery) ||
+        paddedRunningNumber.includes(numberQuery) ||
         `#${runningNumber}`.includes(q) ||
+        `#${paddedRunningNumber}`.includes(q) ||
         s.name.toLowerCase().includes(q) ||
         s.artist.toLowerCase().includes(q) ||
         String(s.interpretVersion ?? '')
@@ -208,6 +185,11 @@ export const HomePage = () => {
         languageFilter.trim() === '' ||
         String(s.language ?? '').toLowerCase() ===
           languageFilter.trim().toLowerCase();
+      const matchesGenre =
+        genreFilter.trim() === '' ||
+        (s.genres ?? [])
+          .map((genre) => String(genre).toLowerCase())
+          .includes(genreFilter.trim().toLowerCase());
       const matchesYear =
         yearFilter.trim() === '' || String(s.songYear ?? '') === yearFilter;
 
@@ -216,6 +198,7 @@ export const HomePage = () => {
         matchesInterpretVersion &&
         matchesAlbum &&
         matchesLanguage &&
+        matchesGenre &&
         matchesYear
       );
     });
@@ -227,6 +210,7 @@ export const HomePage = () => {
     interpretVersionFilter,
     albumFilter,
     languageFilter,
+    genreFilter,
     yearFilter,
   ]);
 
@@ -247,17 +231,6 @@ export const HomePage = () => {
       <div className="header-row">
         <h2>Alle Songs</h2>
         <div className="header-actions">
-          {canAdminEdit && (
-            <button
-              onClick={handleDownloadAllSongs}
-              className="primary-button btn-export"
-              disabled={downloadingAll}
-              title="Alle gespeicherten Songtexte als ZIP herunterladen"
-            >
-              {downloadingAll ? 'Download laeuft…' : 'Alle Texte downloaden'}
-            </button>
-          )}
-
           {canAdminEdit && (
             <button
               onClick={() => navigate('/songAdd')}
@@ -344,7 +317,7 @@ export const HomePage = () => {
               </select>
 
               <label className="filter-label" htmlFor="language-filter">
-                Sprache
+                Skala
               </label>
               <select
                 id="language-filter"
@@ -377,6 +350,23 @@ export const HomePage = () => {
                 ))}
               </select>
 
+              <label className="filter-label" htmlFor="genre-filter">
+                Genre
+              </label>
+              <select
+                id="genre-filter"
+                className="filter-control"
+                value={genreFilter}
+                onChange={(e) => setGenreFilter(e.target.value)}
+              >
+                <option value="">Alle</option>
+                {genreOptions.map((genre) => (
+                  <option key={genre} value={genre}>
+                    {genre}
+                  </option>
+                ))}
+              </select>
+
               <button
                 type="button"
                 className="filter-reset-btn"
@@ -385,6 +375,7 @@ export const HomePage = () => {
                   setInterpretVersionFilter('');
                   setAlbumFilter('');
                   setLanguageFilter('');
+                  setGenreFilter('');
                   setYearFilter('');
                 }}
                 disabled={!hasActiveTagFilters}
@@ -407,41 +398,15 @@ export const HomePage = () => {
                 className="song-item-btn"
               >
                 <span className="song-item-content">
-                  <span className="song-main-text">
-                    {song.name} - {song.artist}
-                  </span>
-                  <span className="song-tags-row">
-                    {song.runningNumber !== null &&
-                    song.runningNumber !== undefined ? (
-                      <span className="song-tag song-tag-running-number">
-                        Nr.: {song.runningNumber}
-                      </span>
-                    ) : null}
-                    {hasText(song.artist) ? (
-                      <span className="song-tag song-tag-interpret">
-                        Interpret: {song.artist}
-                      </span>
-                    ) : null}
-                    {hasText(song.interpretVersion) ? (
-                      <span className="song-tag song-tag-interpret-version">
-                        Interpret (Vers.): {song.interpretVersion}
-                      </span>
-                    ) : null}
-                    {hasText(song.album) ? (
-                      <span className="song-tag song-tag-album">
-                        Album: {song.album}
-                      </span>
-                    ) : null}
-                    {song.songYear !== null && song.songYear !== undefined ? (
-                      <span className="song-tag song-tag-year">
-                        Jahr: {song.songYear}
-                      </span>
-                    ) : null}
-                    {hasText(song.language) ? (
-                      <span className="song-tag song-tag-language">
-                        Sprache: {song.language}
-                      </span>
-                    ) : null}
+                  <span className="song-main-row">
+                    <span className="song-main-text">
+                      {song.name} - {song.artist}
+                    </span>
+                    <span className="song-main-number">
+                      {song.runningNumber !== null && song.runningNumber !== undefined
+                        ? `#${toPaddedRunningNumber(song.runningNumber)}`
+                        : '#-'}
+                    </span>
                   </span>
                 </span>
               </button>
@@ -450,19 +415,31 @@ export const HomePage = () => {
                 <div className="song-item-actions">
                   <button
                     onClick={() => navigate(`/song/${song.id}/edit`)}
-                    className="song-small-btn btn-overwrite"
+                    className="song-small-btn btn-overwrite icon-only-btn"
                     disabled={busySongId === song.id}
                     title="Song bearbeiten"
+                    aria-label="Song bearbeiten"
                   >
-                    Edit
+                    <svg viewBox="0 0 24 24" className="song-action-icon" aria-hidden="true">
+                      <path
+                        fill="currentColor"
+                        d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a1.003 1.003 0 0 0 0-1.42l-2.5-2.5a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 2-1.66z"
+                      />
+                    </svg>
                   </button>
                   <button
                     onClick={() => handleDeleteSong(song)}
-                    className="song-small-btn btn-delete"
+                    className="song-small-btn btn-delete icon-only-btn"
                     disabled={busySongId === song.id}
                     title="Song loeschen"
+                    aria-label="Song loeschen"
                   >
-                    Loeschen
+                    <svg viewBox="0 0 24 24" className="song-action-icon" aria-hidden="true">
+                      <path
+                        fill="currentColor"
+                        d="M6 7h12l-1 14H7L6 7zm3-3h6l1 2h4v2H4V6h4l1-2z"
+                      />
+                    </svg>
                   </button>
                 </div>
               )}

@@ -70,6 +70,9 @@ function Navbar() {
         <Link to="/profile" className="navbar-link">
           Profile
         </Link>
+        <Link to="/song-lists" className="navbar-link">
+          Song-Listen
+        </Link>
         {isAdmin && (
           <Link to="/admin" className="navbar-link">
             Admin Panel

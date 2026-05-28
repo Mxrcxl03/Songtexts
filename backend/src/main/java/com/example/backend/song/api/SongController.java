@@ -1,14 +1,9 @@
 package com.example.backend.song.api;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.util.List;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
 import com.example.backend.song.api.dto.SongRequest;
 import com.example.backend.song.api.dto.SongResponse;
-import com.example.backend.song.domain.Song;
 import com.example.backend.song.service.SongService;
 import com.example.backend.song.service.DocumentExportService;
 import org.springframework.http.HttpStatus;
@@ -111,47 +106,6 @@ public class SongController {
         } catch (Exception e) {
             return ResponseEntity.internalServerError().build();
         }
-    }
-
-    @GetMapping("/export/html/all")
-    public ResponseEntity<byte[]> exportAllToHtmlZip() {
-        try {
-            var songs = songService.getAllSongEntities();
-            byte[] zip = buildSongsHtmlZip(songs);
-
-            return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION,
-                            "attachment; filename=\"songtexte-html.zip\"")
-                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                    .body(zip);
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().build();
-        }
-    }
-
-    private byte[] buildSongsHtmlZip(List<Song> songs) throws IOException {
-        try (ByteArrayOutputStream output = new ByteArrayOutputStream();
-                ZipOutputStream zipOutputStream = new ZipOutputStream(output)) {
-            for (Song song : songs) {
-                byte[] content = documentExportService.exportToHtml(song);
-                ZipEntry entry = new ZipEntry(toSafeFileName(song.getName()) + ".htm");
-                zipOutputStream.putNextEntry(entry);
-                zipOutputStream.write(content);
-                zipOutputStream.closeEntry();
-            }
-
-            zipOutputStream.finish();
-            return output.toByteArray();
-        }
-    }
-
-    private String toSafeFileName(String value) {
-        String raw = value == null ? "song" : value.trim();
-        String normalized = raw.replaceAll("[\\\\/:*?\"<>|]", "_");
-        if (normalized.isBlank()) {
-            return "song";
-        }
-        return normalized;
     }
 
 }

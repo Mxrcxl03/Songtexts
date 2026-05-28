@@ -19,6 +19,7 @@ import { AddSongPage } from './pages/AddSongPage.tsx';
 import { EditSongPage } from './pages/EditSongPage.tsx';
 import { AdminPanelPage } from './pages/AdminPanelPage.tsx';
 import { SongDetailPage } from './pages/SongDetailPage.tsx';
+import { SongListsPage } from './pages/SongListsPage.tsx';
 import Navbar from './components/NavBar.tsx';
 import { RequireAdminRoute } from './routes/RequireAdminRoute.tsx';
 
@@ -53,6 +54,22 @@ function AppLayout() {
   const location = useLocation();
   const hideNavbar =
     location.pathname === '/login' || location.pathname === '/register';
+
+  React.useEffect(() => {
+    const path = location.pathname;
+    let nextTitle = 'Campfire Songs';
+
+    if (path === '/login') nextTitle = 'Login Songtexte | Campfire Songs';
+    else if (path === '/register') nextTitle = 'Registrierung | Campfire Songs';
+    else if (path === '/song-lists') nextTitle = 'Song-Listen | Campfire Songs';
+    else if (path === '/songAdd') nextTitle = 'Song erstellen | Campfire Songs';
+    else if (/^\/song\/\d+\/edit$/.test(path)) nextTitle = 'Song bearbeiten | Campfire Songs';
+    else if (/^\/song\/\d+/.test(path)) nextTitle = 'Song-Detail | Campfire Songs';
+    else if (path === '/admin') nextTitle = 'Admin Panel | Campfire Songs';
+    else if (path === '/profile' || path === '/user') nextTitle = 'Profil | Campfire Songs';
+
+    document.title = nextTitle;
+  }, [location.pathname]);
 
   return (
     <>
@@ -118,6 +135,15 @@ function AppLayout() {
           element={
             <PrivateRoute>
               <SongDetailPage />
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/song-lists"
+          element={
+            <PrivateRoute>
+              <SongListsPage />
             </PrivateRoute>
           }
         />

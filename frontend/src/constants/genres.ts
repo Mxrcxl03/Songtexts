@@ -1,0 +1,25 @@
+export const GENRE_OPTIONS = [
+  'Lobpreis',
+  'Worship',
+  'Rock',
+  'Pop',
+  'Ballade',
+  'Folk',
+  'Gospel',
+  'Soul',
+  'Blues',
+  'Country',
+  'Hip-Hop',
+  'Rap',
+  'R&B',
+  'Funk',
+  'Reggae',
+  'Jazz',
+  'Swing',
+  'Schlager',
+  'Alternative',
+  'Indie',
+  'Electronic',
+] as const;
+
+export const MAX_GENRES_PER_SONG = 4;

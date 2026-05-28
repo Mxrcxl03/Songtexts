@@ -100,6 +100,12 @@ body {
   margin: 0 0 1rem;
 }
 
+.auth-subtitle {
+  margin: -0.65rem 0 0.35rem;
+  color: var(--text-soft);
+  font-size: 0.92rem;
+}
+
 .stack-form {
   display: flex;
   flex-direction: column;
@@ -210,22 +216,78 @@ body {
   font-weight: 700;
 }
 
+.song-meta-grid {
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 1rem;
+}
+
+.song-meta-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.2rem;
+  margin: 0 0 1rem;
+}
+
+.song-meta-column {
+  min-width: 0;
+}
+
+.song-meta-item {
+  margin: 0 0 0.35rem;
+}
+
+.song-meta-item-label {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.05;
+}
+
+.song-meta-item-value {
+  display: block;
+  font-size: 0.95rem;
+  line-height: 1.05;
+}
+
 .song-meta-field {
-  margin: 0.3rem 0;
+  background: var(--surface-muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  margin: 0;
+  padding: 0.55rem 0.65rem;
 }
 
 .song-meta-field strong {
   display: block;
+  font-size: 0.82rem;
+  color: var(--text-soft);
 }
 
 .song-meta-value {
   display: block;
-  margin-top: 0.1rem;
+  margin-top: 0.2rem;
 }
 
 .meta-number-input {
   width: 8rem;
   margin-top: 0.1rem;
+}
+
+.song-meta-key-inputs {
+  display: inline-flex;
+  gap: 0.5rem;
+}
+
+.song-meta-field .meta-number-input {
+  margin-top: 0.25rem;
+  max-width: none;
+  width: 100%;
+}
+
+.song-meta-field select.text-input {
+  width: 100%;
 }
 
 .header-row {
@@ -376,21 +438,47 @@ body {
 }
 
 .song-item-content {
-  display: block;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.song-main-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .song-main-text {
   display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 500;
+}
+
+.song-main-number {
+  flex: 0 0 auto;
+  margin-left: auto;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-soft);
+  font-weight: 600;
 }
 
 .song-tags-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.35rem;
   margin-top: 0.2rem;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .song-tag {
@@ -492,6 +580,11 @@ body {
   color: #ffffff;
 }
 
+.song-tag-genre {
+  background-color: #14532d;
+  color: #ffffff;
+}
+
 .song-item-actions {
   margin-left: auto;
   display: flex;
@@ -507,6 +600,19 @@ body {
   padding: 4px 7px;
   cursor: pointer;
   white-space: nowrap;
+}
+
+.icon-only-btn {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  min-width: 2rem;
+}
+
+.song-action-icon {
+  display: block;
+  height: 0.95rem;
+  width: 0.95rem;
 }
 
 .song-small-btn:disabled {
@@ -561,6 +667,121 @@ body {
 
 .search-input:focus {
   border-color: var(--focus-border);
+}
+
+.song-lists-layout {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  margin-top: 0.8rem;
+}
+
+.song-lists-sidebar {
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 0.6rem;
+  background: var(--surface-muted);
+}
+
+.song-lists-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.song-lists-item {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 0.45rem;
+}
+
+.song-lists-item-main {
+  align-items: flex-start;
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.15rem;
+  text-align: left;
+  width: 100%;
+}
+
+.song-lists-item-main.is-active {
+  background: rgba(59, 130, 246, 0.12);
+  border-radius: 6px;
+}
+
+.song-lists-item-main span {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+}
+
+.song-lists-item-actions {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+
+.song-lists-content {
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 0.8rem;
+  background: var(--surface);
+  min-height: 14rem;
+}
+
+.song-lists-song-rows {
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.song-lists-song-link {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+  text-decoration: underline;
+}
+
+.song-list-editor {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.song-list-add-row {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.song-list-editor-rows {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.song-list-editor-rows li {
+  align-items: center;
+  display: flex;
+  gap: 0.7rem;
+  justify-content: space-between;
+}
+
+.song-list-editor-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
 }
 
 .search-filter-row {
@@ -644,6 +865,29 @@ body {
   cursor: default;
 }
 
+.genre-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem 0.7rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 0.6rem;
+  background: var(--surface-muted);
+}
+
+.genre-checkbox-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  font-size: 0.92rem;
+  color: var(--text-main);
+}
+
+.genre-checkbox-item input[type='checkbox'] {
+  margin: 0;
+}
+
 @media (max-width: 640px) {
   .search-filter-row {
     align-items: stretch;
@@ -717,6 +961,14 @@ body {
   .page {
     width: min(100% - 1.5rem, 860px);
   }
+
+  .song-meta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .song-meta-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 768px) {
@@ -739,6 +991,11 @@ body {
     margin-top: 0.2rem;
   }
 
+  .song-tags-row {
+    overflow-x: auto;
+    padding-bottom: 0.15rem;
+  }
+
   .line-wrapper {
     gap: 0.55rem;
   }
@@ -753,6 +1010,14 @@ body {
 
   .html-preview-frame {
     height: 76dvh;
+  }
+
+  .song-lists-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .song-list-add-row {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -782,9 +1047,22 @@ body {
     justify-content: flex-end;
   }
 
+  .genre-checkbox-grid {
+    grid-template-columns: 1fr;
+  }
+
   .meta-number-input {
     width: 100%;
     max-width: 10rem;
+  }
+
+  .song-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .song-meta-columns {
+    grid-template-columns: 1fr;
+    gap: 0.9rem;
   }
 
   .button-row {
@@ -876,6 +1154,31 @@ body {
   padding: 0.75rem;
 }
 
+.lyrics-editor-readonly {
+  margin-top: 1rem;
+}
+
+.song-autoscroll-btn {
+  backdrop-filter: blur(2px);
+  background: rgba(15, 23, 42, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  bottom: 1rem;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.45rem 0.8rem;
+  position: fixed;
+  right: 1rem;
+  z-index: 45;
+}
+
+.song-autoscroll-btn.is-active {
+  background: rgba(30, 102, 68, 0.78);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
 .lyrics-editor-fulltext .textarea-chords {
   min-height: 20rem;
 }
@@ -898,6 +1201,12 @@ body {
 .lyrics-chord-surface.is-chord-mode {
   border-color: rgba(185, 28, 28, 0.45);
   box-shadow: 0 0 0 3px rgba(185, 28, 28, 0.08);
+}
+
+.lyrics-chord-surface-readonly {
+  max-height: none;
+  overflow: visible;
+  resize: none;
 }
 
 .lyrics-editor-textline {
@@ -932,6 +1241,25 @@ body {
   grid-template-rows: calc(var(--lyrics-chord-rows) * var(--lyrics-chord-row-height)) 1.35rem;
   min-width: 0;
   position: relative;
+}
+
+.lyrics-line-readonly {
+  color: inherit;
+  font: inherit;
+  margin: 0;
+  min-height: 1.35rem;
+  white-space: pre;
+}
+
+.lyrics-line-readonly-chords {
+  color: #b91c1c;
+  font-weight: 700;
+  line-height: 1.22rem;
+  min-height: 1.22rem;
+}
+
+.lyrics-line-readonly-text {
+  line-height: 1.35rem;
 }
 
 .lyrics-chord-layer,
@@ -969,6 +1297,15 @@ body {
 .lyrics-text-layer {
   align-self: start;
   line-height: 1.35;
+}
+
+.lyrics-text-layer.is-refrain-underlined .lyrics-line-editable,
+.lyrics-text-layer.is-refrain-underlined .lyrics-editor-chars,
+.lyrics-text-layer.is-refrain-underlined .lyrics-line-readonly-text,
+.lyrics-text-layer.is-refrain-underlined .lyrics-char-btn {
+  text-decoration: underline;
+  text-underline-offset: 0.14em;
+  text-decoration-thickness: 0.08em;
 }
 
 .lyrics-line-editable,

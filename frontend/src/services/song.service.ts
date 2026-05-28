@@ -37,12 +37,6 @@ const exportToHtml = (songId: number) => {
   });
 };
 
-const exportAllToHtmlZip = () => {
-  return api.get('/public/song/export/html/all', {
-    responseType: 'blob',
-  });
-};
-
 export default {
   getSongContent,
   getSongById,
@@ -52,5 +46,4 @@ export default {
   exportToWord,
   exportToPdf,
   exportToHtml,
-  exportAllToHtmlZip,
 };

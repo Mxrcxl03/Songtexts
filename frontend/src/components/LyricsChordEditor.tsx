@@ -6,6 +6,7 @@ import type {
 } from 'react';
 import type { SongLine } from '../types/song';
 import type { ChordAnnotation } from '../types/chordAnnotation';
+import { getRefrainUnderlineFlags, isSongPartLine } from '../utils/songPart';
 
 type LyricsChordEditorProps = {
   lines: SongLine[];
@@ -18,6 +19,7 @@ const SONG_PART_OPTIONS = [
   'Strophe',
   'Pre-Refrain',
   'Refrain',
+  'Refrain End',
   'Bridge',
   'Instrumental',
   'Outro',
@@ -27,7 +29,6 @@ const SONG_PART_OPTIONS = [
 const MAX_CHORD_NAME_LENGTH = 14;
 const normalizeChord = (name: string): string =>
   name.trim().slice(0, MAX_CHORD_NAME_LENGTH);
-const isSongPartLine = (text: string): boolean => /^\s*\[[^\]]+\]\s*$/.test(text);
 const isLyricLine = (text: string): boolean => !isSongPartLine(text);
 const CHORD_MARKER_GAP_CH = 0.45;
 const CHORD_MARKER_WIDTH_PADDING_CH = 1.3;
@@ -522,6 +523,7 @@ export function LyricsChordEditor({
     lyricLineCounter += 1;
     return lyricLineCounter;
   });
+  const refrainUnderlineFlags = getRefrainUnderlineFlags(safeLines);
 
   const removeChordAtSelection = () => {
     const lineIndex = bubble?.lineIndex ?? selectedLine;
@@ -676,6 +678,7 @@ export function LyricsChordEditor({
     safeLines.map((line, lineIndex) => {
       const lyricLineNumber = lyricLineNumbers[lineIndex];
       const currentIsSongPartLine = isSongPartLine(line.text ?? '');
+      const shouldUnderlineLine = refrainUnderlineFlags[lineIndex] ?? false;
       const chordLayout = buildChordMarkerLayout(line);
 
       return (
@@ -704,7 +707,13 @@ export function LyricsChordEditor({
             <div className="lyrics-chord-layer" aria-hidden="true">
               {renderChordMarkers(chordLayout, lineIndex)}
             </div>
-            <div className="lyrics-text-layer">
+            <div
+              className={
+                shouldUnderlineLine
+                  ? 'lyrics-text-layer is-refrain-underlined'
+                  : 'lyrics-text-layer'
+              }
+            >
               {renderChordUnderlines(line)}
               {chordMode ? (
                 <div className="lyrics-editor-chars">{renderInteractiveLine(line, lineIndex)}</div>

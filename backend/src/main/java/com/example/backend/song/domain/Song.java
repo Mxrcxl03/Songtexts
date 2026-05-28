@@ -70,6 +70,12 @@ public class Song {
     @Column
     private String cadence;
 
+    @ElementCollection
+    @CollectionTable(name = "song_genres", joinColumns = @JoinColumn(name = "song_id"))
+    @OrderColumn(name = "genre_order")
+    @Column(name = "genre", nullable = false)
+    private List<String> genres = new ArrayList<>();
+
     @Lob
     @Column(name = "html_content", columnDefinition = "TEXT")
     private String htmlContent;
@@ -132,5 +138,12 @@ public class Song {
             return;
         line.setSong(this);
         this.lines.add(line);
+    }
+
+    public void setGenres(List<String> newGenres) {
+        this.genres.clear();
+        if (newGenres != null) {
+            this.genres.addAll(newGenres);
+        }
     }
 }

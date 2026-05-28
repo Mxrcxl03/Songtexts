@@ -26,5 +26,6 @@ public class SongRequest {
     private String keyRoot;
     private String keySuffix;
     private String play;
+    private List<String> genres;
     private List<SongLineDTO> lines;
 }

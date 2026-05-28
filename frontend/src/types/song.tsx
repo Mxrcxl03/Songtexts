@@ -26,6 +26,7 @@ export type Song = {
   keyRoot?: string | null;
   keySuffix?: string | null;
   play?: string | null;
+  genres?: string[] | null;
   lines: SongLine[];
 };
 
