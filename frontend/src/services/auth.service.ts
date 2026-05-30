@@ -28,8 +28,14 @@ export const login = (username: string, password: string): Promise<User> => {
     .post<User>("/auth/login", { username, password })
     .then((response) => response.data)
     .catch((error) => {
-      console.error("Login error:", error);
-      throw error;
+      if (axios.isAxiosError(error)) {
+        const backendMessage =
+          typeof error.response?.data?.message === "string"
+            ? error.response.data.message
+            : null;
+        throw new Error(backendMessage ?? error.message ?? "Login fehlgeschlagen");
+      }
+      throw new Error("Login fehlgeschlagen");
     });
 };
 
