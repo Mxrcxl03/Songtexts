@@ -274,13 +274,8 @@ public class DocumentExportService {
 
             // Song lyrics with positioned chord rows
             for (SongLine line : song.getLines()) {
-                String chordLine = buildChordLine(line);
-                if (!chordLine.isBlank()) {
-                    XWPFParagraph chordParagraph = document.createParagraph();
-                    chordParagraph.createRun().setText(chordLine);
-                }
                 XWPFParagraph lyricParagraph = document.createParagraph();
-                lyricParagraph.createRun().setText(line.getText());
+                lyricParagraph.createRun().setText(buildInlineChordLyricLine(line));
             }
 
             document.write(output);
@@ -464,6 +459,56 @@ public class DocumentExportService {
             out.append(cell);
         }
         return out.toString();
+    }
+
+    private String buildInlineChordLyricLine(SongLine line) {
+        if (line == null) {
+            return "";
+        }
+
+        String text = line.getText() == null ? "" : line.getText();
+        if (line.getChordAnnotations() == null || line.getChordAnnotations().isEmpty()) {
+            return text;
+        }
+
+        List<com.example.backend.song.domain.ChordAnnotation> chords = line.getChordAnnotations().stream()
+                .filter(c -> c != null && c.getName() != null && !c.getName().isBlank())
+                .sorted(Comparator
+                        .comparingInt((com.example.backend.song.domain.ChordAnnotation c) -> Math.max(0,
+                                c.getPosition()))
+                        .thenComparing(c -> c.getName().trim(), String.CASE_INSENSITIVE_ORDER))
+                .toList();
+
+        if (chords.isEmpty()) {
+            return text;
+        }
+
+        StringBuilder out = new StringBuilder(text);
+        int insertedChars = 0;
+
+        for (var chord : chords) {
+            String chordName = chord.getName().trim();
+            if (chordName.isEmpty()) {
+                continue;
+            }
+
+            int charIndex = toCharIndexFromCodePointPosition(text, chord.getPosition());
+            String token = "[" + chordName + "]";
+            out.insert(charIndex + insertedChars, token);
+            insertedChars += token.length();
+        }
+
+        return out.toString();
+    }
+
+    private int toCharIndexFromCodePointPosition(String text, int codePointPosition) {
+        if (text == null || text.isEmpty()) {
+            return 0;
+        }
+
+        int codePointCount = text.codePointCount(0, text.length());
+        int clampedPosition = Math.max(0, Math.min(codePointPosition, codePointCount));
+        return text.offsetByCodePoints(0, clampedPosition);
     }
 
     private String injectMetaIntoExistingHtml(String existingHtml, Song song) {

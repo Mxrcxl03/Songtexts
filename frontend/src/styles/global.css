@@ -1158,6 +1158,40 @@ body {
   margin-top: 1rem;
 }
 
+.song-autoscroll-controls {
+  align-items: center;
+  backdrop-filter: blur(2px);
+  background: rgba(15, 23, 42, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 12px;
+  bottom: 3.75rem;
+  color: #fff;
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.45rem 0.65rem;
+  position: fixed;
+  right: 1rem;
+  z-index: 45;
+}
+
+.song-autoscroll-controls label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.song-autoscroll-speed-row {
+  align-items: center;
+  display: flex;
+  gap: 0.4rem;
+}
+
+.song-autoscroll-speed-input {
+  min-height: 2rem;
+  padding: 0.25rem 0.45rem;
+  width: 4.1rem;
+}
+
 .song-autoscroll-btn {
   backdrop-filter: blur(2px);
   background: rgba(15, 23, 42, 0.58);
@@ -1177,6 +1211,17 @@ body {
 .song-autoscroll-btn.is-active {
   background: rgba(30, 102, 68, 0.78);
   border-color: rgba(255, 255, 255, 0.5);
+}
+
+@media (max-width: 640px) {
+  .song-autoscroll-controls {
+    bottom: 3.45rem;
+    right: 0.6rem;
+  }
+
+  .song-autoscroll-btn {
+    right: 0.6rem;
+  }
 }
 
 .lyrics-editor-fulltext .textarea-chords {

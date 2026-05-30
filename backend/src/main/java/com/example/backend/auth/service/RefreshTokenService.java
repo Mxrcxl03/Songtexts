@@ -20,8 +20,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class RefreshTokenService {
 
-    @Value("${security.jwt.expiration-time}")
-    private long jwtExpiration;
+    @Value("${security.jwt.refresh-expiration-time}")
+    private long jwtRefreshExpiration;
 
     private final RefreshTokenRepository refreshTokenRepository;
 
@@ -44,7 +44,7 @@ public class RefreshTokenService {
         RefreshToken refreshToken = new RefreshToken();
         refreshToken.setUser(user);
         refreshToken.setToken(UUID.randomUUID().toString());
-        refreshToken.setExpiryDate(Instant.now().plusMillis(jwtExpiration * 100));
+        refreshToken.setExpiryDate(Instant.now().plusMillis(jwtRefreshExpiration));
 
         return refreshTokenRepository.save(refreshToken);
     }

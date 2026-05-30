@@ -7,6 +7,7 @@ import { LyricsChordEditor } from '../components/LyricsChordEditor';
 import { GENRE_OPTIONS, MAX_GENRES_PER_SONG } from '../constants/genres';
 import { SCALE_OPTIONS } from '../constants/scales';
 import type { SongLine } from '../types/song';
+import { parseInlineChordImport } from '../utils/inlineChordImport';
 import '../styles/global.css';
 
 const KEY_ROOT_OPTIONS = [
@@ -82,6 +83,7 @@ export const AddSongPage = () => {
   const [lines, setLines] = useState<SongLine[]>([
     { orderIndex: 0, text: '', chordAnnotations: [] },
   ]);
+  const [inlineImportText, setInlineImportText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -161,6 +163,15 @@ export const AddSongPage = () => {
       }
       return [...current, genre];
     });
+  };
+
+  const handleInlineImport = () => {
+    const input = inlineImportText.trim();
+    if (!input) {
+      alert('Bitte zuerst den Inline-Text zum Import einfuegen.');
+      return;
+    }
+    setLines(parseInlineChordImport(input));
   };
 
   return (
@@ -375,6 +386,27 @@ export const AddSongPage = () => {
 
         <div className="form-field">
           <label>Lyrics & Akkorde</label>
+          <label htmlFor="inline-chord-import-add">
+            Import (Inline-Format): <code>[Akkord]Text</code>
+          </label>
+          <textarea
+            id="inline-chord-import-add"
+            value={inlineImportText}
+            onChange={(e) => setInlineImportText(e.target.value)}
+            className="text-input"
+            rows={6}
+            placeholder={'Beispiel:\n[F#m]Personal [E]Jesus\n[Refrain]\n[C]Hello [G]world'}
+          />
+          <div className="button-row">
+            <button
+              type="button"
+              onClick={handleInlineImport}
+              disabled={isLoading}
+              className="primary-button btn-neutral"
+            >
+              Import in Editor uebernehmen
+            </button>
+          </div>
           <LyricsChordEditor lines={lines} onChange={setLines} disabled={isLoading} />
         </div>
 

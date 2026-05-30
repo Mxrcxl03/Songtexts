@@ -32,6 +32,9 @@ public class JwtService {
     @Value("${security.jwt.expiration-time}")
     private long jwtExpiration;
 
+    @Value("${security.jwt.refresh-expiration-time}")
+    private long jwtRefreshExpiration;
+
     @Value("${security.jwt.jwtCookieName}")
     private String jwtCookie;
 
@@ -40,11 +43,11 @@ public class JwtService {
 
     public ResponseCookie generateJwtCookie(User user) {
         String jwt = generateTokenFromUsername(user.getUsername());
-        return generateCookie(jwtCookie, jwt, "/api");
+        return generateCookie(jwtCookie, jwt, "/api", jwtExpiration);
     }
 
     public ResponseCookie generateRefreshJwtCookie(String refreshToken) {
-        return generateCookie(jwtRefreshCookie, refreshToken, "/api/v1/auth/refreshtoken");
+        return generateCookie(jwtRefreshCookie, refreshToken, "/api/v1/auth/refreshtoken", jwtRefreshExpiration);
     }
 
     public String getJwtFromCookies(HttpServletRequest request) {
@@ -110,8 +113,13 @@ public class JwtService {
                 .compact();
     }
 
-    private ResponseCookie generateCookie(String name, String value, String path) {
-        return ResponseCookie.from(name, value).path(path).maxAge((long) 24 * 60 * 60).httpOnly(true).build();
+    private ResponseCookie generateCookie(String name, String value, String path, long maxAgeMillis) {
+        long maxAgeSeconds = Math.max(1L, (long) Math.ceil(maxAgeMillis / 1000.0d));
+        return ResponseCookie.from(name, value)
+                .path(path)
+                .maxAge(maxAgeSeconds)
+                .httpOnly(true)
+                .build();
     }
 
     private String getCookieValueByName(HttpServletRequest request, String name) {

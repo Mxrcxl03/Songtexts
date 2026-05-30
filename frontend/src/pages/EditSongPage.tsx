@@ -7,6 +7,7 @@ import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { LyricsChordEditor } from '../components/LyricsChordEditor';
 import { GENRE_OPTIONS, MAX_GENRES_PER_SONG } from '../constants/genres';
 import { SCALE_OPTIONS } from '../constants/scales';
+import { parseInlineChordImport } from '../utils/inlineChordImport';
 import '../styles/global.css';
 
 const KEY_ROOT_OPTIONS = [
@@ -137,6 +138,7 @@ export const EditSongPage = () => {
   const [genres, setGenres] = useState<string[]>([]);
   const [runningNumber, setRunningNumber] = useState<number | null>(null);
   const [lines, setLines] = useState<SongLine[]>([]);
+  const [inlineImportText, setInlineImportText] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -233,6 +235,15 @@ export const EditSongPage = () => {
       }
       return [...current, genre];
     });
+  };
+
+  const handleInlineImport = () => {
+    const input = inlineImportText.trim();
+    if (!input) {
+      alert('Bitte zuerst den Inline-Text zum Import einfuegen.');
+      return;
+    }
+    setLines(parseInlineChordImport(input));
   };
 
   if (!isOnline) {
@@ -389,6 +400,27 @@ export const EditSongPage = () => {
         </div>
         <div className="form-field">
           <label>Lyrics & Akkorde</label>
+          <label htmlFor="inline-chord-import-edit">
+            Import (Inline-Format): <code>[Akkord]Text</code>
+          </label>
+          <textarea
+            id="inline-chord-import-edit"
+            value={inlineImportText}
+            onChange={(e) => setInlineImportText(e.target.value)}
+            className="text-input"
+            rows={6}
+            placeholder={'Beispiel:\n[F#m]Personal [E]Jesus\n[Refrain]\n[C]Hello [G]world'}
+          />
+          <div className="button-row">
+            <button
+              type="button"
+              onClick={handleInlineImport}
+              disabled={isSubmitting}
+              className="primary-button btn-neutral"
+            >
+              Import in Editor uebernehmen
+            </button>
+          </div>
           <LyricsChordEditor lines={lines} onChange={setLines} disabled={isSubmitting} />
         </div>
         <div className="button-row">

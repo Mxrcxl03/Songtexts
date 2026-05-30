@@ -6,7 +6,7 @@ import type {
 } from 'react';
 import type { SongLine } from '../types/song';
 import type { ChordAnnotation } from '../types/chordAnnotation';
-import { getRefrainUnderlineFlags, isSongPartLine } from '../utils/songPart';
+import { getRefrainUnderlineFlags, getSongPartLabel, isSongPartLine } from '../utils/songPart';
 
 type LyricsChordEditorProps = {
   lines: SongLine[];
@@ -197,6 +197,7 @@ export function LyricsChordEditor({
   const [songPartMenuOpen, setSongPartMenuOpen] = useState<boolean>(false);
   const [songPartPreset, setSongPartPreset] = useState<string>(SONG_PART_OPTIONS[0]);
   const [songPartCustom, setSongPartCustom] = useState<string>('');
+  const [refrainRepeatCount, setRefrainRepeatCount] = useState<string>('1');
   const lineRefs = useRef(new Map<number, HTMLDivElement>());
   const lineStackRefs = useRef(new Map<number, HTMLDivElement>());
   const charButtonRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -492,8 +493,13 @@ export function LyricsChordEditor({
   };
 
   const insertSongPartLine = () => {
-    const selectedLabel =
+    let selectedLabel =
       songPartPreset === 'Benutzerdefiniert' ? songPartCustom : songPartPreset;
+    if (selectedSongPartLabel === 'refrain') {
+      const parsedCount = Number.parseInt(refrainRepeatCount, 10);
+      const repeatCount = Number.isNaN(parsedCount) ? 1 : Math.max(1, parsedCount);
+      selectedLabel = repeatCount > 1 ? `Refrain: ${repeatCount}x` : 'Refrain';
+    }
     const lineText = toSongPartLineText(selectedLabel);
     if (!lineText) return;
 
@@ -524,6 +530,11 @@ export function LyricsChordEditor({
     return lyricLineCounter;
   });
   const refrainUnderlineFlags = getRefrainUnderlineFlags(safeLines);
+  const selectedSongPartLabel = getSongPartLabel(
+    toSongPartLineText(
+      songPartPreset === 'Benutzerdefiniert' ? songPartCustom : songPartPreset
+    )
+  );
 
   const removeChordAtSelection = () => {
     const lineIndex = bubble?.lineIndex ?? selectedLine;
@@ -802,6 +813,30 @@ export function LyricsChordEditor({
                     placeholder="z. B. Solo"
                     className="text-input"
                   />
+                )}
+                {selectedSongPartLabel === 'refrain' && (
+                  <>
+                    <label htmlFor="refrain-repeat-count">Anzahl Wiederholungen:</label>
+                    <input
+                      id="refrain-repeat-count"
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={refrainRepeatCount}
+                      onChange={(event) => setRefrainRepeatCount(event.target.value)}
+                      className="text-input"
+                    />
+                    <p>
+                      Hinweis: 1x wird als <code>[Refrain]</code> eingefuegt, ab 2x als{' '}
+                      <code>[Refrain: Nx]</code>.
+                    </p>
+                  </>
+                )}
+                {selectedSongPartLabel === 'refrain end' && (
+                  <p>
+                    Hinweis: <code>[Refrain End]</code> beendet den Refrain-Block, wird in der Song-Detail-Seite
+                    aber nicht angezeigt.
+                  </p>
                 )}
                 <div className="lyrics-songpart-menu-actions">
                   <button

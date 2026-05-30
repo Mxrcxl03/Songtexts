@@ -8,7 +8,7 @@ import type { User } from '../types/user';
 import UserService from '../services/user.service';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { buildChordLine } from '../utils/buildChordLine';
-import { getRefrainUnderlineFlags, isSongPartLine } from '../utils/songPart';
+import { getRefrainUnderlineFlags, isRefrainEndLine, isSongPartLine } from '../utils/songPart';
 
 const toDisplayString = (value: string | number | null | undefined): string => {
   if (value === null || value === undefined) return '';
@@ -17,6 +17,63 @@ const toDisplayString = (value: string | number | null | undefined): string => {
 const toBracketValue = (value: string | number | null | undefined): string => {
   const display = toDisplayString(value);
   return `[${display || ' '}]`;
+};
+const toExportValue = (value: string | number | null | undefined): string => {
+  const display = toDisplayString(value);
+  return display || '-';
+};
+const toFileNamePart = (value: string | number | null | undefined): string => {
+  const base = toDisplayString(value)
+    .normalize('NFKD')
+    .replace(/[^\w\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '_');
+  return base || 'song';
+};
+const buildSongExportText = (song: Song): string => {
+  const keyDisplay = [toDisplayString(song.keyRoot), toDisplayString(song.keySuffix)]
+    .filter(Boolean)
+    .join(' ');
+  const header = [
+    `Song-Nr.: ${toExportValue(song.runningNumber)}`,
+    `Titel: ${toExportValue(song.name)}`,
+    `Interpret: ${toExportValue(song.artist)}`,
+    `Interpret (Version): ${toExportValue(song.interpretVersion)}`,
+    `Album: ${toExportValue(song.album)}`,
+    `Jahr: ${toExportValue(song.songYear)}`,
+    `Komponist: ${toExportValue(song.composer)}`,
+    `Produzent(en): ${toExportValue(song.producer)}`,
+    `Genre: ${toExportValue((song.genres ?? []).join(', '))}`,
+    `Key: ${toExportValue(keyDisplay)}`,
+    `Skala: ${toExportValue(song.language)}`,
+    `Capo: ${song.capo === -1 ? '-' : toExportValue(song.capo)}`,
+    `Taktart: ${toExportValue(song.timeSignature)}`,
+    `Kadenz: ${toExportValue(song.cadence)}`,
+    '',
+    'Text:',
+    '',
+  ];
+
+  const lyricRows = (song.lines ?? []).flatMap((line) => {
+    const text = line?.text ?? '';
+    const chordLine = buildChordLine(text, line?.chordAnnotations ?? []);
+    const rows: string[] = [];
+    if (chordLine.trim().length > 0) rows.push(chordLine);
+    rows.push(text);
+    return rows;
+  });
+
+  return [...header, ...lyricRows].join('\n');
+};
+
+const parseAutoScrollMultiplier = (value: string): number | null => {
+  const normalized = value.trim().replace(',', '.');
+  if (!normalized) return null;
+
+  const parsed = Number.parseFloat(normalized);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+
+  return Math.round(parsed * 10) / 10;
 };
 
 function SongLineViewRow({
@@ -61,6 +118,7 @@ function SongLineViewRow({
 
 export function SongDetailPage() {
   const AUTO_SCROLL_PX_PER_SECOND = 42;
+  const DEFAULT_AUTO_SCROLL_MULTIPLIER = 1;
   const isOnline = useOnlineStatus();
   const isOffline = !isOnline;
   const { id } = useParams<{ id: string }>();
@@ -70,9 +128,28 @@ export function SongDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [autoScrollActive, setAutoScrollActive] = useState(false);
+  const [autoScrollSpeedInput, setAutoScrollSpeedInput] = useState('1');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const autoScrollFrameRef = useRef<number | null>(null);
   const autoScrollLastTsRef = useRef<number | null>(null);
+  const downloadSongAsText = () => {
+    if (!song) return;
+    const content = buildSongExportText(song);
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const downloadUrl = globalThis.URL.createObjectURL(blob);
+    const anchor = globalThis.document.createElement('a');
+    const runningNumberPrefix =
+      song.runningNumber === null || song.runningNumber === undefined
+        ? ''
+        : `${String(song.runningNumber).padStart(4, '0')}_`;
+
+    anchor.href = downloadUrl;
+    anchor.download = `${runningNumberPrefix}${toFileNamePart(song.name)}.txt`;
+    globalThis.document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    globalThis.URL.revokeObjectURL(downloadUrl);
+  };
 
   useEffect(() => {
     if (!id) {
@@ -138,7 +215,9 @@ export function SongDetailPage() {
         return;
       }
 
-      const pixelsToScroll = (AUTO_SCROLL_PX_PER_SECOND * deltaMs) / 1000;
+      const speedMultiplier =
+        parseAutoScrollMultiplier(autoScrollSpeedInput) ?? DEFAULT_AUTO_SCROLL_MULTIPLIER;
+      const pixelsToScroll = (AUTO_SCROLL_PX_PER_SECOND * speedMultiplier * deltaMs) / 1000;
       globalThis.scrollTo(0, Math.min(maxScrollTop, currentScrollTop + pixelsToScroll));
       autoScrollFrameRef.current = requestAnimationFrame(step);
     };
@@ -152,7 +231,7 @@ export function SongDetailPage() {
       }
       autoScrollLastTsRef.current = null;
     };
-  }, [autoScrollActive]);
+  }, [autoScrollActive, autoScrollSpeedInput]);
 
   if (loading) return <p>Laedt...</p>;
   if (error) return <p style={{ color: 'crimson' }}>Fehler: {error}</p>;
@@ -184,13 +263,17 @@ export function SongDetailPage() {
       ? ''
       : String(song.runningNumber).padStart(4, '0');
   const genresDisplay = (song.genres ?? []).join(', ');
+  const allLines = song.lines ?? [];
+  const refrainUnderlineFlags = getRefrainUnderlineFlags(allLines);
+  const visibleLines = allLines
+    .map((line, index) => ({ line, originalIndex: index }))
+    .filter(({ line }) => !isRefrainEndLine(line.text ?? ''));
   let lyricLineCounter = 0;
-  const lyricLineNumbers = (song.lines ?? []).map((line) => {
+  const lyricLineNumbers = visibleLines.map(({ line }) => {
     if (isSongPartLine(line.text ?? '')) return null;
     lyricLineCounter += 1;
     return lyricLineCounter;
   });
-  const refrainUnderlineFlags = getRefrainUnderlineFlags(song.lines ?? []);
 
   return (
     <div className="page">
@@ -201,6 +284,14 @@ export function SongDetailPage() {
           #{songNumberDisplay || '-'} {song.name}
         </h2>
         <div className="header-actions">
+          <button
+            type="button"
+            onClick={downloadSongAsText}
+            className="primary-button btn-export"
+            title="Song als Textdatei herunterladen"
+          >
+            Export .txt
+          </button>
           {canAdminEdit && (
             <button
               onClick={() => navigate(`/song/${song.id}/edit`)}
@@ -287,14 +378,35 @@ export function SongDetailPage() {
       <h3>Text:</h3>
       <div className="lyrics-editor-readonly">
         <div className="textarea-chords lyrics-chord-surface lyrics-chord-surface-readonly">
-          {(song.lines ?? []).map((line, index) => (
+          {visibleLines.map(({ line, originalIndex }, index) => (
             <SongLineViewRow
               key={line.id ?? index}
               line={line}
               lyricLineNumber={lyricLineNumbers[index]}
-              underlineText={refrainUnderlineFlags[index] ?? false}
+              underlineText={refrainUnderlineFlags[originalIndex] ?? false}
             />
           ))}
+        </div>
+      </div>
+      <div className="song-autoscroll-controls">
+        <label htmlFor="autoscroll-speed-input">AutoScroll</label>
+        <div className="song-autoscroll-speed-row">
+          <input
+            id="autoscroll-speed-input"
+            type="text"
+            inputMode="decimal"
+            value={autoScrollSpeedInput}
+            onChange={(event) => setAutoScrollSpeedInput(event.target.value)}
+            onBlur={() => {
+              const parsed = parseAutoScrollMultiplier(autoScrollSpeedInput);
+              setAutoScrollSpeedInput(
+                parsed === null ? String(DEFAULT_AUTO_SCROLL_MULTIPLIER) : parsed.toFixed(1).replace('.', ',')
+              );
+            }}
+            className="text-input song-autoscroll-speed-input"
+            aria-label="AutoScroll Geschwindigkeit"
+          />
+          <span>x</span>
         </div>
       </div>
       <button
