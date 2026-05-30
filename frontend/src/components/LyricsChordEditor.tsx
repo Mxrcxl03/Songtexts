@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type {
   ClipboardEvent,
   KeyboardEvent as ReactKeyboardEvent,
@@ -12,6 +12,7 @@ type LyricsChordEditorProps = {
   lines: SongLine[];
   onChange: (lines: SongLine[]) => void;
   disabled?: boolean;
+  lockSongPartLines?: boolean;
 };
 
 const SONG_PART_OPTIONS = [
@@ -145,6 +146,18 @@ const setCaretOffset = (element: HTMLElement, offset: number) => {
 
 const lineKey = (line: SongLine, index: number) => line.id ?? `line-${index}`;
 
+const codePointToCodeUnitIndex = (text: string, codePointOffset: number): number => {
+  const safeOffset = Math.max(0, codePointOffset);
+  let codePointIndex = 0;
+  let codeUnitIndex = 0;
+  for (const symbol of text) {
+    if (codePointIndex >= safeOffset) break;
+    codeUnitIndex += symbol.length;
+    codePointIndex += 1;
+  }
+  return codeUnitIndex;
+};
+
 const buildChordMarkerLayout = (line: SongLine): ChordMarkerLayout => {
   const normalized = (line.chordAnnotations ?? [])
     .map((chord) => ({
@@ -184,10 +197,31 @@ const buildChordMarkerLayout = (line: SongLine): ChordMarkerLayout => {
   };
 };
 
+const areAnchorMetricsEqual = (
+  previous: Record<string, { left: number; width: number }>,
+  next: Record<string, { left: number; width: number }>
+): boolean => {
+  const previousKeys = Object.keys(previous);
+  const nextKeys = Object.keys(next);
+  if (previousKeys.length !== nextKeys.length) return false;
+
+  for (const key of nextKeys) {
+    const prevValue = previous[key];
+    const nextValue = next[key];
+    if (!prevValue || !nextValue) return false;
+    if (prevValue.left !== nextValue.left || prevValue.width !== nextValue.width) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
 export function LyricsChordEditor({
   lines,
   onChange,
   disabled = false,
+  lockSongPartLines = false,
 }: Readonly<LyricsChordEditorProps>) {
   const [selectedLine, setSelectedLine] = useState<number>(0);
   const [selectedPosition, setSelectedPosition] = useState<number>(0);
@@ -213,11 +247,17 @@ export function LyricsChordEditor({
     setSelectedPosition(-1);
   };
 
-  const safeLines = normalizeLines(
-    lines?.length ? lines : [{ orderIndex: 0, text: '', chordAnnotations: [] }]
+  const safeLines = useMemo(
+    () =>
+      normalizeLines(
+        lines?.length ? lines : [{ orderIndex: 0, text: '', chordAnnotations: [] }]
+      ),
+    [lines]
   );
 
   const emit = (next: SongLine[]) => onChange(normalizeLines(next));
+  const isLockedSongPartLineAt = (lineIndex: number): boolean =>
+    lockSongPartLines && isSongPartLine(safeLines[lineIndex]?.text ?? '');
 
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -267,8 +307,6 @@ export function LyricsChordEditor({
   }, [safeLines, chordMode]);
 
   useLayoutEffect(() => {
-    if (!chordMode) return;
-
     const measureAnchors = () => {
       const next: Record<string, { left: number; width: number }> = {};
 
@@ -278,21 +316,58 @@ export function LyricsChordEditor({
 
         const stackRect = stack.getBoundingClientRect();
         const line = safeLines[lineIndex];
+        const lineText = line.text ?? '';
+        const textLength = Array.from(lineText).length;
 
         for (const chord of line.chordAnnotations ?? []) {
           const position = Math.max(0, Number(chord.position ?? 0));
-          const button = charButtonRefs.current.get(toAnchorKey(lineIndex, position));
-          if (!button) continue;
+          const anchorKey = toAnchorKey(lineIndex, position);
 
-          const buttonRect = button.getBoundingClientRect();
-          next[toAnchorKey(lineIndex, position)] = {
-            left: buttonRect.left - stackRect.left,
-            width: buttonRect.width,
+          // In chord mode we can measure exact character buttons.
+          if (chordMode) {
+            const button = charButtonRefs.current.get(anchorKey);
+            if (!button) continue;
+            const buttonRect = button.getBoundingClientRect();
+            next[anchorKey] = {
+              left: buttonRect.left - stackRect.left,
+              width: buttonRect.width,
+            };
+            continue;
+          }
+
+          // In text mode we measure against the editable text node so imported chords are
+          // already aligned before the user toggles chord mode.
+          const editable = lineRefs.current.get(lineIndex);
+          const textNode = editable?.firstChild;
+          if (!editable || !textNode || textNode.nodeType !== Node.TEXT_NODE) continue;
+
+          const clampedPosition = Math.min(textLength, position);
+          const startOffset = codePointToCodeUnitIndex(lineText, clampedPosition);
+          const endOffset =
+            clampedPosition < textLength
+              ? codePointToCodeUnitIndex(lineText, clampedPosition + 1)
+              : startOffset;
+
+          const range = document.createRange();
+          range.setStart(textNode, startOffset);
+          range.setEnd(textNode, endOffset);
+          const rect = range.getBoundingClientRect();
+
+          if (rect.left === 0 && rect.width === 0 && clampedPosition === 0 && lineText.length === 0) {
+            continue;
+          }
+
+          const fallbackWidth = Math.max(1, parseFloat(getComputedStyle(editable).fontSize || '16') * 0.6);
+          next[anchorKey] = {
+            left: rect.left - stackRect.left,
+            width: rect.width > 0 ? rect.width : fallbackWidth,
           };
         }
       }
 
-      setChordAnchorMetricsPx(next);
+      setChordAnchorMetricsPx((previous) =>
+        areAnchorMetricsEqual(previous, next) ? previous : next
+      );
     };
 
     measureAnchors();
@@ -304,7 +379,7 @@ export function LyricsChordEditor({
       globalThis.cancelAnimationFrame(rafId);
       globalThis.removeEventListener('resize', onResize);
     };
-  }, [chordMode, lines]);
+  }, [chordMode, safeLines]);
 
   const keepFocus = (lineIndex: number, offset: number) => {
     pendingFocus.current = { lineIndex, offset };
@@ -433,7 +508,7 @@ export function LyricsChordEditor({
   };
 
   const onEditableKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>, lineIndex: number) => {
-    if (disabled || chordMode) return;
+    if (disabled || chordMode || isLockedSongPartLineAt(lineIndex)) return;
     const offset = getCaretOffset(event.currentTarget);
 
     if (event.key === 'Enter') {
@@ -443,13 +518,16 @@ export function LyricsChordEditor({
     }
 
     if (event.key === 'Backspace' && offset === 0) {
+      if (isLockedSongPartLineAt(lineIndex - 1)) {
+        return;
+      }
       event.preventDefault();
       mergeWithPrevious(lineIndex);
     }
   };
 
   const onEditablePaste = (event: ClipboardEvent<HTMLDivElement>, lineIndex: number) => {
-    if (disabled || chordMode) return;
+    if (disabled || chordMode || isLockedSongPartLineAt(lineIndex)) return;
     event.preventDefault();
     insertTextAtCaret(lineIndex, event.clipboardData.getData('text/plain'), getCaretOffset(event.currentTarget));
   };
@@ -734,11 +812,16 @@ export function LyricsChordEditor({
                     if (node) lineRefs.current.set(lineIndex, node);
                     else lineRefs.current.delete(lineIndex);
                   }}
-                  className="lyrics-line-editable"
-                  contentEditable={!disabled}
+                  className={
+                    isLockedSongPartLineAt(lineIndex)
+                      ? 'lyrics-line-editable is-readonly-songpart'
+                      : 'lyrics-line-editable'
+                  }
+                  contentEditable={!disabled && !isLockedSongPartLineAt(lineIndex)}
                   suppressContentEditableWarning
                   spellCheck={false}
                   onInput={(event) => {
+                    if (isLockedSongPartLineAt(lineIndex)) return;
                     const caretOffset = getCaretOffset(event.currentTarget);
                     updateLineText(lineIndex, event.currentTarget.textContent ?? '');
                     keepFocus(lineIndex, caretOffset);

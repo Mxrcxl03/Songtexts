@@ -6,8 +6,7 @@ import type { Song, SongCreate, SongLine } from '../types/song';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { LyricsChordEditor } from '../components/LyricsChordEditor';
 import { GENRE_OPTIONS, MAX_GENRES_PER_SONG } from '../constants/genres';
-import { SCALE_OPTIONS } from '../constants/scales';
-import { parseInlineChordImport } from '../utils/inlineChordImport';
+import { LANGUAGE_OPTIONS } from '../constants/scales';
 import '../styles/global.css';
 
 const KEY_ROOT_OPTIONS = [
@@ -50,7 +49,6 @@ const KEY_ROOT_OPTIONS = [
 type SongFormValues = {
   artist: string;
   interpretVersion: string;
-  lyricist: string;
   composer: string;
   producer: string;
   name: string;
@@ -88,6 +86,15 @@ const parseCapoInput = (value: string): number | null | undefined => {
   return Number.isNaN(parsed) ? undefined : parsed;
 };
 
+const normalizeLanguageOption = (value: string | null | undefined): string => {
+  const trimmed = (value ?? '').trim();
+  const normalized = trimmed.toLowerCase();
+  if (normalized === 'english' || normalized === 'englisch') return 'English';
+  if (normalized === 'deutsch' || normalized === 'german') return 'Deutsch';
+  if (normalized === 'espanol' || normalized === 'spanish' || normalized === 'spanisch') return 'Espanol';
+  return LANGUAGE_OPTIONS.includes(trimmed as (typeof LANGUAGE_OPTIONS)[number]) ? trimmed : '';
+};
+
 const songToPayload = (
   lines: SongLine[],
   values: SongFormValues,
@@ -95,7 +102,6 @@ const songToPayload = (
 ): SongCreate => ({
   artist: values.artist,
   interpretVersion: values.interpretVersion.trim() || null,
-  lyricist: values.lyricist.trim() || null,
   composer: values.composer.trim() || null,
   producer: values.producer.trim() || null,
   name: values.name,
@@ -121,7 +127,6 @@ export const EditSongPage = () => {
 
   const [artist, setArtist] = useState('');
   const [interpretVersion, setInterpretVersion] = useState('');
-  const [lyricist, setLyricist] = useState('');
   const [composer, setComposer] = useState('');
   const [producer, setProducer] = useState('');
   const [name, setName] = useState('');
@@ -138,7 +143,6 @@ export const EditSongPage = () => {
   const [genres, setGenres] = useState<string[]>([]);
   const [runningNumber, setRunningNumber] = useState<number | null>(null);
   const [lines, setLines] = useState<SongLine[]>([]);
-  const [inlineImportText, setInlineImportText] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -147,7 +151,6 @@ export const EditSongPage = () => {
   const values: SongFormValues = {
     artist,
     interpretVersion,
-    lyricist,
     composer,
     producer,
     name,
@@ -176,7 +179,6 @@ export const EditSongPage = () => {
         const song = response.data as Song;
         setArtist(song.artist ?? '');
         setInterpretVersion(song.interpretVersion ?? '');
-        setLyricist(song.lyricist ?? '');
         setComposer(song.composer ?? '');
         setProducer(song.producer ?? '');
         setName(song.name ?? '');
@@ -188,7 +190,7 @@ export const EditSongPage = () => {
         setKeySuffix(song.keySuffix ?? '');
         setPlay(song.play ?? '');
         setCapo(song.capo == null ? '' : song.capo === -1 ? '-' : String(song.capo));
-        setLanguage(song.language ?? '');
+        setLanguage(normalizeLanguageOption(song.language));
         setCadence(song.cadence ?? '');
         setGenres(song.genres ?? []);
         setRunningNumber(song.runningNumber ?? null);
@@ -237,15 +239,6 @@ export const EditSongPage = () => {
     });
   };
 
-  const handleInlineImport = () => {
-    const input = inlineImportText.trim();
-    if (!input) {
-      alert('Bitte zuerst den Inline-Text zum Import einfuegen.');
-      return;
-    }
-    setLines(parseInlineChordImport(input));
-  };
-
   if (!isOnline) {
     return (
       <div className="page page-form">
@@ -290,10 +283,6 @@ export const EditSongPage = () => {
             onChange={(e) => setInterpretVersion(e.target.value)}
             className="text-input"
           />
-        </div>
-        <div>
-          <label>Text:</label>
-          <input value={lyricist} onChange={(e) => setLyricist(e.target.value)} className="text-input" />
         </div>
         <div>
           <label>Komponist:</label>
@@ -365,12 +354,12 @@ export const EditSongPage = () => {
           <input value={capo} onChange={(e) => setCapo(e.target.value)} className="text-input" />
         </div>
         <div>
-          <label>Skala:</label>
+          <label>Sprache:</label>
           <select value={language} onChange={(e) => setLanguage(e.target.value)} className="text-input">
             <option value="">Keine Angabe</option>
-            {SCALE_OPTIONS.map((scale) => (
-              <option key={scale} value={scale}>
-                {scale}
+            {LANGUAGE_OPTIONS.map((languageOption) => (
+              <option key={languageOption} value={languageOption}>
+                {languageOption}
               </option>
             ))}
           </select>
@@ -400,27 +389,6 @@ export const EditSongPage = () => {
         </div>
         <div className="form-field">
           <label>Lyrics & Akkorde</label>
-          <label htmlFor="inline-chord-import-edit">
-            Import (Inline-Format): <code>[Akkord]Text</code>
-          </label>
-          <textarea
-            id="inline-chord-import-edit"
-            value={inlineImportText}
-            onChange={(e) => setInlineImportText(e.target.value)}
-            className="text-input"
-            rows={6}
-            placeholder={'Beispiel:\n[F#m]Personal [E]Jesus\n[Refrain]\n[C]Hello [G]world'}
-          />
-          <div className="button-row">
-            <button
-              type="button"
-              onClick={handleInlineImport}
-              disabled={isSubmitting}
-              className="primary-button btn-neutral"
-            >
-              Import in Editor uebernehmen
-            </button>
-          </div>
           <LyricsChordEditor lines={lines} onChange={setLines} disabled={isSubmitting} />
         </div>
         <div className="button-row">

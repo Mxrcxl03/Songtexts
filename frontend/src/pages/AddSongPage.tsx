@@ -1,13 +1,12 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import axios from 'axios';
 import SongService from '../services/song.service';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { LyricsChordEditor } from '../components/LyricsChordEditor';
 import { GENRE_OPTIONS, MAX_GENRES_PER_SONG } from '../constants/genres';
-import { SCALE_OPTIONS } from '../constants/scales';
-import type { SongLine } from '../types/song';
-import { parseInlineChordImport } from '../utils/inlineChordImport';
+import { LANGUAGE_OPTIONS } from '../constants/scales';
+import type { SongCreate, SongLine } from '../types/song';
 import '../styles/global.css';
 
 const KEY_ROOT_OPTIONS = [
@@ -47,6 +46,12 @@ const KEY_ROOT_OPTIONS = [
   'Bm',
 ];
 
+const DOCX_IMPORT_EXPORT_RULES_TOOLTIP =
+  'Import/Export-Regeln:\n'
+  + '- Meta-Tags: Tagname: Wert (z. B. Titel: Neue Importprobe)\n'
+  + '- Akkorde im Text: <Am>, <F#m>, <G>\n'
+  + '- Songparts als eigene Zeile: [Verse], [Refrain], [Bridge]';
+
 const toNullableNumber = (value: string): number | null => {
   const parsed = value.trim() ? Number.parseInt(value, 10) : null;
   return Number.isNaN(parsed) ? null : parsed;
@@ -61,11 +66,19 @@ const parseCapoInput = (value: string): number | null | undefined => {
   return Number.isNaN(parsed) ? undefined : parsed;
 };
 
+const normalizeLanguageOption = (value: string | null | undefined): string => {
+  const trimmed = (value ?? '').trim();
+  const normalized = trimmed.toLowerCase();
+  if (normalized === 'english' || normalized === 'englisch') return 'English';
+  if (normalized === 'deutsch' || normalized === 'german') return 'Deutsch';
+  if (normalized === 'espanol' || normalized === 'spanish' || normalized === 'spanisch') return 'Espanol';
+  return LANGUAGE_OPTIONS.includes(trimmed as (typeof LANGUAGE_OPTIONS)[number]) ? trimmed : '';
+};
+
 export const AddSongPage = () => {
   const isOnline = useOnlineStatus();
   const [artist, setArtist] = useState('');
   const [interpretVersion, setInterpretVersion] = useState('');
-  const [lyricist, setLyricist] = useState('');
   const [composer, setComposer] = useState('');
   const [producer, setProducer] = useState('');
   const [name, setName] = useState('');
@@ -83,8 +96,9 @@ export const AddSongPage = () => {
   const [lines, setLines] = useState<SongLine[]>([
     { orderIndex: 0, text: '', chordAnnotations: [] },
   ]);
-  const [inlineImportText, setInlineImportText] = useState('');
+  const [lockSongPartLines, setLockSongPartLines] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const docxInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -106,7 +120,6 @@ export const AddSongPage = () => {
       await SongService.createSong({
         artist,
         interpretVersion: interpretVersion.trim() || null,
-        lyricist: lyricist.trim() || null,
         composer: composer.trim() || null,
         producer: producer.trim() || null,
         name,
@@ -165,18 +178,88 @@ export const AddSongPage = () => {
     });
   };
 
-  const handleInlineImport = () => {
-    const input = inlineImportText.trim();
-    if (!input) {
-      alert('Bitte zuerst den Inline-Text zum Import einfuegen.');
+  const applyImportedSongToForm = (imported: SongCreate) => {
+    setArtist(imported.artist ?? '');
+    setInterpretVersion(imported.interpretVersion ?? '');
+    setComposer(imported.composer ?? '');
+    setProducer(imported.producer ?? '');
+    setName(imported.name ?? '');
+    setAlbum(imported.album ?? '');
+    setBpm(imported.bpm == null ? '' : String(imported.bpm));
+    setSongYear(imported.songYear == null ? '' : String(imported.songYear));
+    setTimeSignature(imported.timeSignature ?? '');
+    setKeyRoot(imported.keyRoot ?? '');
+    setKeySuffix(imported.keySuffix ?? '');
+    setPlay(imported.play ?? '');
+    setCapo(imported.capo == null ? '' : imported.capo === -1 ? '-' : String(imported.capo));
+    setLanguage(normalizeLanguageOption(imported.language));
+    setCadence(imported.cadence ?? '');
+    setGenres(imported.genres ?? []);
+    setLines(
+      imported.lines?.length
+        ? imported.lines.map((line, index) => ({
+            id: line.id,
+            orderIndex: line.orderIndex ?? index,
+            text: line.text ?? '',
+            chordAnnotations: line.chordAnnotations ?? [],
+          }))
+        : [{ orderIndex: 0, text: '', chordAnnotations: [] }]
+    );
+    setLockSongPartLines(true);
+  };
+
+  const handleDocxImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.docx')) {
+      alert('Bitte eine .docx-Datei auswaehlen.');
       return;
     }
-    setLines(parseInlineChordImport(input));
+
+    try {
+      setIsLoading(true);
+      const response = await SongService.previewSongFromWord(file);
+      applyImportedSongToForm(response.data as SongCreate);
+    } catch (err) {
+      console.error('Fehler beim DOCX-Import:', err);
+      if (axios.isAxiosError(err)) {
+        const serverMessage =
+          typeof err.response?.data === 'string'
+            ? err.response.data
+            : err.response?.data?.message;
+        alert(serverMessage || 'Fehler beim DOCX-Import');
+      } else {
+        alert('Fehler beim DOCX-Import');
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="page page-form">
       <h2>Neuen Song hinzufuegen</h2>
+      <div className="form-field">
+        <label>Schnellimport (.docx)</label>
+        <input
+          ref={docxInputRef}
+          type="file"
+          accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          onChange={handleDocxImport}
+          hidden
+        />
+        <button
+          type="button"
+          onClick={() => docxInputRef.current?.click()}
+          disabled={isLoading}
+          className="primary-button btn-neutral"
+          title={DOCX_IMPORT_EXPORT_RULES_TOOLTIP}
+        >
+          DOCX auswaehlen und Felder automatisch fuellen
+        </button>
+      </div>
 
       <form onSubmit={handleSubmit} className="stack-form">
         <div className="form-field">
@@ -197,15 +280,6 @@ export const AddSongPage = () => {
             value={interpretVersion}
             id="interpret-version-file"
             onChange={(e) => setInterpretVersion(e.target.value)}
-            className="text-input"
-          />
-        </div>
-        <div className="form-field">
-          <label htmlFor="lyricist-file">Text:</label>
-          <input
-            value={lyricist}
-            id="lyricist-file"
-            onChange={(e) => setLyricist(e.target.value)}
             className="text-input"
           />
         </div>
@@ -339,7 +413,7 @@ export const AddSongPage = () => {
           />
         </div>
         <div className="form-field">
-          <label htmlFor="language-file">Skala:</label>
+          <label htmlFor="language-file">Sprache:</label>
           <select
             id="language-file"
             value={language}
@@ -347,9 +421,9 @@ export const AddSongPage = () => {
             className="text-input"
           >
             <option value="">Keine Angabe</option>
-            {SCALE_OPTIONS.map((scale) => (
-              <option key={scale} value={scale}>
-                {scale}
+            {LANGUAGE_OPTIONS.map((languageOption) => (
+              <option key={languageOption} value={languageOption}>
+                {languageOption}
               </option>
             ))}
           </select>
@@ -386,28 +460,12 @@ export const AddSongPage = () => {
 
         <div className="form-field">
           <label>Lyrics & Akkorde</label>
-          <label htmlFor="inline-chord-import-add">
-            Import (Inline-Format): <code>[Akkord]Text</code>
-          </label>
-          <textarea
-            id="inline-chord-import-add"
-            value={inlineImportText}
-            onChange={(e) => setInlineImportText(e.target.value)}
-            className="text-input"
-            rows={6}
-            placeholder={'Beispiel:\n[F#m]Personal [E]Jesus\n[Refrain]\n[C]Hello [G]world'}
+          <LyricsChordEditor
+            lines={lines}
+            onChange={setLines}
+            disabled={isLoading}
+            lockSongPartLines={lockSongPartLines}
           />
-          <div className="button-row">
-            <button
-              type="button"
-              onClick={handleInlineImport}
-              disabled={isLoading}
-              className="primary-button btn-neutral"
-            >
-              Import in Editor uebernehmen
-            </button>
-          </div>
-          <LyricsChordEditor lines={lines} onChange={setLines} disabled={isLoading} />
         </div>
 
         <button type="submit" disabled={isLoading} className="primary-button btn-confirm">

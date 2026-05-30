@@ -80,7 +80,7 @@ class SongServiceValidationTest {
 
         SongResponse response = songService.createSong(request);
 
-        assertEquals("n.n.", response.getLanguage());
+        assertEquals("English", response.getLanguage());
         assertIterableEquals(List.of("Rock", "Pop"), response.getGenres());
         assertEquals(2L, response.getRunningNumber());
         assertEquals(3, response.getLines().get(0).getChordAnnotations().size());
@@ -145,7 +145,7 @@ class SongServiceValidationTest {
     void updateSong_ignoresUnknownLineIdsAndSortsLinesByOrderIndex() {
         Song song = new Song("Artist", "Old Name", "Album");
         song.setId(7L);
-        song.setLanguage("Dur");
+        song.setLanguage("English");
 
         SongLine existingLine = new SongLine("Old line", 1);
         existingLine.setId(11L);
@@ -197,7 +197,7 @@ class SongServiceValidationTest {
     void updateSong_keepsNameWhenNullButClearsNullableMetadata() {
         Song song = new Song("Artist", "Persisted Name", "Album");
         song.setId(9L);
-        song.setLanguage("Dur");
+        song.setLanguage("English");
 
         when(songRepository.findAll(Sort.by("id").ascending())).thenReturn(List.of());
         when(songRepository.findById(9L)).thenReturn(Optional.of(song));

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import { useEffect, useRef, useState } from 'react';
 import api from '../services/api';
 import axios from 'axios';
+import SongService from '../services/song.service';
 import type { Song, SongLine } from '../types/song';
 import type { User } from '../types/user';
 import UserService from '../services/user.service';
@@ -18,10 +19,6 @@ const toBracketValue = (value: string | number | null | undefined): string => {
   const display = toDisplayString(value);
   return `[${display || ' '}]`;
 };
-const toExportValue = (value: string | number | null | undefined): string => {
-  const display = toDisplayString(value);
-  return display || '-';
-};
 const toFileNamePart = (value: string | number | null | undefined): string => {
   const base = toDisplayString(value)
     .normalize('NFKD')
@@ -29,41 +26,6 @@ const toFileNamePart = (value: string | number | null | undefined): string => {
     .trim()
     .replace(/\s+/g, '_');
   return base || 'song';
-};
-const buildSongExportText = (song: Song): string => {
-  const keyDisplay = [toDisplayString(song.keyRoot), toDisplayString(song.keySuffix)]
-    .filter(Boolean)
-    .join(' ');
-  const header = [
-    `Song-Nr.: ${toExportValue(song.runningNumber)}`,
-    `Titel: ${toExportValue(song.name)}`,
-    `Interpret: ${toExportValue(song.artist)}`,
-    `Interpret (Version): ${toExportValue(song.interpretVersion)}`,
-    `Album: ${toExportValue(song.album)}`,
-    `Jahr: ${toExportValue(song.songYear)}`,
-    `Komponist: ${toExportValue(song.composer)}`,
-    `Produzent(en): ${toExportValue(song.producer)}`,
-    `Genre: ${toExportValue((song.genres ?? []).join(', '))}`,
-    `Key: ${toExportValue(keyDisplay)}`,
-    `Skala: ${toExportValue(song.language)}`,
-    `Capo: ${song.capo === -1 ? '-' : toExportValue(song.capo)}`,
-    `Taktart: ${toExportValue(song.timeSignature)}`,
-    `Kadenz: ${toExportValue(song.cadence)}`,
-    '',
-    'Text:',
-    '',
-  ];
-
-  const lyricRows = (song.lines ?? []).flatMap((line) => {
-    const text = line?.text ?? '';
-    const chordLine = buildChordLine(text, line?.chordAnnotations ?? []);
-    const rows: string[] = [];
-    if (chordLine.trim().length > 0) rows.push(chordLine);
-    rows.push(text);
-    return rows;
-  });
-
-  return [...header, ...lyricRows].join('\n');
 };
 
 const parseAutoScrollMultiplier = (value: string): number | null => {
@@ -132,23 +94,29 @@ export function SongDetailPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const autoScrollFrameRef = useRef<number | null>(null);
   const autoScrollLastTsRef = useRef<number | null>(null);
-  const downloadSongAsText = () => {
+  const downloadSongAsDocx = async () => {
     if (!song) return;
-    const content = buildSongExportText(song);
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const downloadUrl = globalThis.URL.createObjectURL(blob);
-    const anchor = globalThis.document.createElement('a');
-    const runningNumberPrefix =
-      song.runningNumber === null || song.runningNumber === undefined
-        ? ''
-        : `${String(song.runningNumber).padStart(4, '0')}_`;
+    try {
+      const response = await SongService.exportToWord(song.id);
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      });
+      const downloadUrl = globalThis.URL.createObjectURL(blob);
+      const anchor = globalThis.document.createElement('a');
+      const runningNumberPrefix =
+        song.runningNumber === null || song.runningNumber === undefined
+          ? ''
+          : `${String(song.runningNumber).padStart(4, '0')}_`;
 
-    anchor.href = downloadUrl;
-    anchor.download = `${runningNumberPrefix}${toFileNamePart(song.name)}.txt`;
-    globalThis.document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    globalThis.URL.revokeObjectURL(downloadUrl);
+      anchor.href = downloadUrl;
+      anchor.download = `${runningNumberPrefix}${toFileNamePart(song.name)}.docx`;
+      globalThis.document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      globalThis.URL.revokeObjectURL(downloadUrl);
+    } catch {
+      setError('Export fehlgeschlagen.');
+    }
   };
 
   useEffect(() => {
@@ -284,14 +252,16 @@ export function SongDetailPage() {
           #{songNumberDisplay || '-'} {song.name}
         </h2>
         <div className="header-actions">
-          <button
-            type="button"
-            onClick={downloadSongAsText}
-            className="primary-button btn-export"
-            title="Song als Textdatei herunterladen"
-          >
-            Export .txt
-          </button>
+          {canAdminEdit && (
+            <button
+              type="button"
+              onClick={downloadSongAsDocx}
+              className="primary-button btn-export"
+              title="Song als DOCX herunterladen"
+            >
+              Export
+            </button>
+          )}
           {canAdminEdit && (
             <button
               onClick={() => navigate(`/song/${song.id}/edit`)}
@@ -357,7 +327,7 @@ export function SongDetailPage() {
             <span className="song-meta-item-value">{toBracketValue(keyDisplay)}</span>
           </p>
           <p className="song-meta-item">
-            <strong className="song-meta-item-label">Skala:</strong>
+            <strong className="song-meta-item-label">Sprache:</strong>
             <span className="song-meta-item-value">{toBracketValue(song.language)}</span>
           </p>
           <p className="song-meta-item">

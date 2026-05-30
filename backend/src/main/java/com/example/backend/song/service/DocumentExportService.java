@@ -13,6 +13,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 @Service
 public class DocumentExportService {
@@ -211,12 +214,13 @@ public class DocumentExportService {
         try (XWPFDocument document = new XWPFDocument();
                 ByteArrayOutputStream output = new ByteArrayOutputStream()) {
 
-            // Title
+            // Title in tagged metadata format for roundtrip imports
             XWPFParagraph titleParagraph = document.createParagraph();
             XWPFRun titleRun = titleParagraph.createRun();
-            titleRun.setText(song.getName());
-            titleRun.setBold(true);
-            titleRun.setFontSize(24);
+            titleRun.setText("Titel: " + valueOrDash(song.getName()));
+            // Keep title tag visually identical to other metadata rows.
+            titleRun.setBold(false);
+            titleRun.setFontSize(12);
 
             // Interpret (Original) and Album
             XWPFParagraph artistParagraph = document.createParagraph();
@@ -235,11 +239,6 @@ public class DocumentExportService {
             if (song.getTimeSignature() != null && !song.getTimeSignature().isBlank()) {
                 XWPFParagraph timeSignatureParagraph = document.createParagraph();
                 timeSignatureParagraph.createRun().setText("Taktart: " + song.getTimeSignature());
-            }
-
-            if (song.getLyricist() != null && !song.getLyricist().isBlank()) {
-                XWPFParagraph lyricistParagraph = document.createParagraph();
-                lyricistParagraph.createRun().setText("Text: " + song.getLyricist());
             }
 
             if (song.getComposer() != null && !song.getComposer().isBlank()) {
@@ -266,6 +265,11 @@ public class DocumentExportService {
                 playParagraph.createRun().setText("Play: " + song.getPlay());
             }
 
+            if (song.getLanguage() != null && !song.getLanguage().isBlank()) {
+                XWPFParagraph languageParagraph = document.createParagraph();
+                languageParagraph.createRun().setText("Sprache: " + song.getLanguage());
+            }
+
             XWPFParagraph albumParagraph = document.createParagraph();
             albumParagraph.createRun().setText("Album: " + song.getAlbum());
 
@@ -279,6 +283,31 @@ public class DocumentExportService {
             }
 
             document.write(output);
+            return output.toByteArray();
+        }
+    }
+
+    public byte[] exportAllToWordZip(List<Song> songs) throws IOException {
+        try (ByteArrayOutputStream output = new ByteArrayOutputStream();
+                ZipOutputStream zip = new ZipOutputStream(output, StandardCharsets.UTF_8)) {
+            int index = 1;
+            for (Song song : songs) {
+                if (song == null) {
+                    continue;
+                }
+                String songName = valueOrDash(song.getName());
+                String numberPrefix = song.getRunningNumber() == null
+                        ? String.format(Locale.ROOT, "%04d_", index)
+                        : String.format(Locale.ROOT, "%04d_", song.getRunningNumber());
+                String fileName = numberPrefix + sanitizeFileName(songName) + ".docx";
+
+                ZipEntry entry = new ZipEntry(fileName);
+                zip.putNextEntry(entry);
+                zip.write(exportToWord(song));
+                zip.closeEntry();
+                index++;
+            }
+            zip.finish();
             return output.toByteArray();
         }
     }
@@ -309,9 +338,6 @@ public class DocumentExportService {
         if (song.getTimeSignature() != null && !song.getTimeSignature().isBlank()) {
             content.append("Taktart: ").append(song.getTimeSignature()).append("\n");
         }
-        if (song.getLyricist() != null && !song.getLyricist().isBlank()) {
-            content.append("Text: ").append(song.getLyricist()).append("\n");
-        }
         if (song.getComposer() != null && !song.getComposer().isBlank()) {
             content.append("Komponist: ").append(song.getComposer()).append("\n");
         }
@@ -327,6 +353,9 @@ public class DocumentExportService {
         }
         if (song.getPlay() != null && !song.getPlay().isBlank()) {
             content.append("Play: ").append(song.getPlay()).append("\n");
+        }
+        if (song.getLanguage() != null && !song.getLanguage().isBlank()) {
+            content.append("Sprache: ").append(song.getLanguage()).append("\n");
         }
         content.append("Album: ").append(song.getAlbum()).append("\n\n");
 
@@ -493,7 +522,7 @@ public class DocumentExportService {
             }
 
             int charIndex = toCharIndexFromCodePointPosition(text, chord.getPosition());
-            String token = "[" + chordName + "]";
+            String token = "<" + chordName + ">";
             out.insert(charIndex + insertedChars, token);
             insertedChars += token.length();
         }
@@ -738,5 +767,17 @@ public class DocumentExportService {
                 .replace(">", "&gt;")
                 .replace("\"", "&quot;")
                 .replace("'", "&#39;");
+    }
+
+    private String sanitizeFileName(String value) {
+        if (value == null || value.isBlank()) {
+            return "song";
+        }
+        String normalized = value
+                .replaceAll("[\\\\/:*?\"<>|]", " ")
+                .replaceAll("\\s+", " ")
+                .trim()
+                .replace(' ', '_');
+        return normalized.isBlank() ? "song" : normalized;
     }
 }

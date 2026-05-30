@@ -6,6 +6,7 @@ import com.example.backend.song.api.dto.SongRequest;
 import com.example.backend.song.api.dto.SongResponse;
 import com.example.backend.song.service.SongService;
 import com.example.backend.song.service.DocumentExportService;
+import com.example.backend.song.service.DocumentImportService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpHeaders;
@@ -18,6 +19,8 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
 
 import lombok.RequiredArgsConstructor;
 
@@ -28,6 +31,7 @@ public class SongController {
 
     public final SongService songService;
     public final DocumentExportService documentExportService;
+    public final DocumentImportService documentImportService;
 
     @GetMapping
     public ResponseEntity<List<SongResponse>> list() {
@@ -46,6 +50,31 @@ public class SongController {
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
+    @PostMapping(path = "/import/word", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<SongResponse> importFromWord(@RequestParam("file") MultipartFile file) {
+        try {
+            SongRequest parsedRequest = documentImportService.parseSongFromWord(file);
+            SongResponse createdSong = songService.createSong(parsedRequest);
+            return ResponseEntity.status(HttpStatus.CREATED).body(createdSong);
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().build();
+        } catch (Exception exception) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @PostMapping(path = "/import/word/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<SongRequest> previewImportFromWord(@RequestParam("file") MultipartFile file) {
+        try {
+            SongRequest parsedRequest = documentImportService.parseSongFromWord(file);
+            return ResponseEntity.ok(parsedRequest);
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().build();
+        } catch (Exception exception) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<SongResponse> update(
             @PathVariable Long id,
@@ -58,6 +87,21 @@ public class SongController {
     public ResponseEntity<Void> deleteSong(@PathVariable Long id) {
         songService.deleteSong(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/export/word/all")
+    public ResponseEntity<byte[]> exportAllToWordZip() {
+        try {
+            var songs = songService.getAllSongEntities();
+            byte[] content = documentExportService.exportAllToWordZip(songs);
+
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"songs_export_all.zip\"")
+                    .contentType(MediaType.parseMediaType("application/zip"))
+                    .body(content);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
     }
 
     @GetMapping("/{id}/export/word")

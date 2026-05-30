@@ -14,6 +14,9 @@
   --text-soft: #4b5563;
   --focus-outline: #bfdbfe;
   --focus-border: #60a5fa;
+  --filter-btn-bg: #e0ecff;
+  --filter-btn-border: #7aa2ff;
+  --filter-btn-text: #1e40af;
 
   --navbar-bg: #1e1e1e;
   --navbar-text: #ffffff;
@@ -37,6 +40,9 @@
   --text-soft: #c4c9d4;
   --focus-outline: #1d4ed8;
   --focus-border: #3b82f6;
+  --filter-btn-bg: #1e3a8a;
+  --filter-btn-border: #60a5fa;
+  --filter-btn-text: #dbeafe;
 
   --navbar-bg: #0b1220;
   --navbar-text: #f9fafb;
@@ -786,7 +792,7 @@ body {
 
 .search-filter-row {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 0.5rem;
   margin: 12px 0;
 }
@@ -800,16 +806,28 @@ body {
 .filter-popup-wrapper {
   position: relative;
   flex-shrink: 0;
+  display: flex;
 }
 
 .filter-toggle-btn {
-  border: 1px solid var(--border-input);
-  background: var(--surface);
-  color: var(--text-main);
+  border: 1px solid var(--filter-btn-border);
+  background: var(--filter-btn-bg);
+  color: var(--filter-btn-text);
   border-radius: 8px;
-  padding: 8px 12px;
+  width: 44px;
+  min-height: 42px;
+  height: 100%;
+  padding: 0;
   font-size: 0.95rem;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.filter-toggle-icon {
+  width: 20px;
+  height: 20px;
 }
 
 .filter-toggle-btn.has-active-filters {
@@ -894,8 +912,8 @@ body {
   }
 
   .filter-toggle-btn {
-    height: 100%;
-    min-width: 82px;
+    min-width: 44px;
+    min-height: 42px;
   }
 }
 
@@ -1367,6 +1385,11 @@ body {
 .lyrics-line-editable:focus {
   background: rgba(15, 23, 42, 0.035);
   box-shadow: inset 0 -1px 0 rgba(15, 23, 42, 0.12);
+}
+
+.lyrics-line-editable.is-readonly-songpart {
+  background: rgba(15, 23, 42, 0.04);
+  cursor: default;
 }
 
 .lyrics-editor-chars {

@@ -40,7 +40,9 @@ class DocumentExportServiceAlignmentTest {
 
         try (XWPFDocument document = new XWPFDocument(new ByteArrayInputStream(docx))) {
             List<String> texts = document.getParagraphs().stream().map(XWPFParagraph::getText).toList();
-            assertTrue(texts.contains("[F#m]Personal [E]Jesus"));
+            assertTrue(texts.contains("Titel: Personal Jesus"));
+            assertTrue(texts.contains("Sprache: Englisch"));
+            assertTrue(texts.contains("<F#m>Personal <E>Jesus"));
         }
     }
 
@@ -55,12 +57,13 @@ class DocumentExportServiceAlignmentTest {
 
         try (XWPFDocument document = new XWPFDocument(new ByteArrayInputStream(docx))) {
             List<String> texts = document.getParagraphs().stream().map(XWPFParagraph::getText).toList();
-            assertTrue(texts.contains("Hallo[Am]"));
+            assertTrue(texts.contains("Hallo<Am>"));
         }
     }
 
     private Song sampleSong() {
         Song song = new Song("Depeche Mode", "Personal Jesus", "Violator");
+        song.setLanguage("Englisch");
         SongLine line = new SongLine("Personal Jesus", 1);
         line.addChord(0, "F#m");
         line.addChord(9, "E");

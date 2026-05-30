@@ -135,6 +135,31 @@ export const HomePage = () => {
     }
   };
 
+  const downloadAllSongsExport = async () => {
+    try {
+      const response = await SongService.exportAllToWordZip();
+      const blob = new Blob([response.data], { type: 'application/zip' });
+      const downloadUrl = globalThis.URL.createObjectURL(blob);
+      const anchor = globalThis.document.createElement('a');
+      anchor.href = downloadUrl;
+      anchor.download = 'songs_export_all.zip';
+      globalThis.document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      globalThis.URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        const serverMessage =
+          typeof err.response?.data === 'string'
+            ? err.response.data
+            : err.response?.data?.message;
+        setError(serverMessage || 'Export fehlgeschlagen');
+      } else {
+        setError('Export fehlgeschlagen');
+      }
+    }
+  };
+
   useEffect(() => {
     UserService.getCurrentUser()
       .then((user) => setCurrentUser(user))
@@ -233,6 +258,16 @@ export const HomePage = () => {
         <div className="header-actions">
           {canAdminEdit && (
             <button
+              type="button"
+              onClick={downloadAllSongsExport}
+              className="primary-button btn-export"
+              title="Alle Songs als ZIP (DOCX) exportieren"
+            >
+              Export All
+            </button>
+          )}
+          {canAdminEdit && (
+            <button
               onClick={() => navigate('/songAdd')}
               className="primary-button btn-edit"
             >
@@ -256,8 +291,15 @@ export const HomePage = () => {
             type="button"
             className={`filter-toggle-btn${hasActiveTagFilters ? ' has-active-filters' : ''}`}
             onClick={() => setShowFilterPopup((prev) => !prev)}
+            aria-label="Filter anzeigen"
+            title="Filter"
           >
-            Filter
+            <svg viewBox="0 0 24 24" className="filter-toggle-icon" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M3 5a1 1 0 0 1 1-1h16a1 1 0 0 1 .8 1.6L14 14.5V20a1 1 0 0 1-1.447.894l-3-1.5A1 1 0 0 1 9 18.5v-4L3.2 5.6A1 1 0 0 1 3 5z"
+              />
+            </svg>
           </button>
 
           {showFilterPopup && (
@@ -317,7 +359,7 @@ export const HomePage = () => {
               </select>
 
               <label className="filter-label" htmlFor="language-filter">
-                Skala
+                Sprache
               </label>
               <select
                 id="language-filter"

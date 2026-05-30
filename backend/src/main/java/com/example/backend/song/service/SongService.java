@@ -326,8 +326,14 @@ public class SongService {
         String input = language.trim();
         String normalized = input.toLowerCase(Locale.ROOT);
 
-        if ("deutsch".equals(normalized) || "englisch".equals(normalized) || "english".equals(normalized)) {
-            return "n.n.";
+        if ("englisch".equals(normalized) || "english".equals(normalized)) {
+            return "English";
+        }
+        if ("deutsch".equals(normalized) || "german".equals(normalized)) {
+            return "Deutsch";
+        }
+        if ("espanol".equals(normalized) || "spanisch".equals(normalized) || "spanish".equals(normalized)) {
+            return "Espanol";
         }
 
         for (String allowed : SongScales.ALLOWED) {
@@ -337,7 +343,7 @@ public class SongService {
         }
 
         throw new IllegalArgumentException(
-                "Skala ist ungueltig. Erlaubt sind: " + String.join(", ", SongScales.ALLOWED));
+                "Sprache ist ungueltig. Erlaubt sind: " + String.join(", ", SongScales.ALLOWED));
     }
 
     private String normalizeCadence(String cadence) {
