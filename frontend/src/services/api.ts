@@ -13,9 +13,11 @@ api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
+    const url = original?.url ?? '';
+    const isAuthCall = typeof url === 'string' && url.startsWith('/auth/');
     const isRefreshCall = original?.url?.includes('/auth/refreshtoken');
 
-    if (error.response?.status === 401 && !original._retry && !isRefreshCall) {
+    if (error.response?.status === 401 && !original._retry && !isRefreshCall && !isAuthCall) {
       if (isRefreshing) {
         await new Promise<void>((resolve) => pendingRequests.push(resolve));
         original._retry = true;

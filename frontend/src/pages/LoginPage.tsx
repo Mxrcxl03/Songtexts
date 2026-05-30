@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import AuthService from '../services/auth.service';
 import { useNavigate } from 'react-router';
+import axios from 'axios';
 import '../styles/global.css';
 
 export const LoginPage = () => {
@@ -16,7 +17,13 @@ export const LoginPage = () => {
       await AuthService.login(username, password);
       navigate('/', { replace: true });
     } catch (e: any) {
-      setErr(e?.message ?? 'Login fehlgeschlagen');
+      if (axios.isAxiosError(e)) {
+        const backendMessage =
+          typeof e.response?.data?.message === 'string' ? e.response.data.message : null;
+        setErr(backendMessage ?? e.message ?? 'Login fehlgeschlagen');
+        return;
+      }
+      setErr('Login fehlgeschlagen');
     }
   }
 
