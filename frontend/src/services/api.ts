@@ -7,7 +7,10 @@ const api: AxiosInstance = axios.create({
 });
 
 let isRefreshing = false;
-let pendingRequests: Array<() => void> = [];
+let pendingRequests: Array<{
+  resolve: () => void;
+  reject: (error: unknown) => void;
+}> = [];
 
 api.interceptors.response.use(
   (res) => res,
@@ -19,7 +22,9 @@ api.interceptors.response.use(
 
     if (error.response?.status === 401 && !original._retry && !isRefreshCall && !isAuthCall) {
       if (isRefreshing) {
-        await new Promise<void>((resolve) => pendingRequests.push(resolve));
+        await new Promise<void>((resolve, reject) =>
+          pendingRequests.push({ resolve, reject })
+        );
         original._retry = true;
         return api(original);
       }
@@ -27,13 +32,16 @@ api.interceptors.response.use(
       try {
         isRefreshing = true;
         await api.post('/auth/refreshtoken');
-        for (const resolve of pendingRequests) {
-          resolve();
+        for (const pending of pendingRequests) {
+          pending.resolve();
         }
         pendingRequests = [];
         original._retry = true;
         return api(original);
       } catch (e) {
+        for (const pending of pendingRequests) {
+          pending.reject(e);
+        }
         pendingRequests = [];
         globalThis.location.href = '/login';
         throw e;
