@@ -16,6 +16,7 @@ public class SongRequest {
     private Integer bpm;
     private Integer capo;
     private String language;
+    private String mode;
     private String cadence;
     private String interpretVersion;
     private Integer songYear;
@@ -28,4 +29,5 @@ public class SongRequest {
     private String play;
     private List<String> genres;
     private List<SongLineDTO> lines;
+    private Long runningNumber;
 }

@@ -7,7 +7,7 @@ import type { Song } from '../types/song';
 import type { User } from '../types/user';
 import UserService from '../services/user.service';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
-
+import { GENRE_GROUPS, GENRE_OPTIONS } from '../constants/genres';
 export const HomePage = () => {
   const isOnline = useOnlineStatus();
   const isOffline = !isOnline;
@@ -22,7 +22,7 @@ export const HomePage = () => {
   const [artistOriginalFilter, setArtistOriginalFilter] = useState('');
   const [interpretVersionFilter, setInterpretVersionFilter] = useState('');
   const [albumFilter, setAlbumFilter] = useState('');
-  const [languageFilter, setLanguageFilter] = useState('');
+  const [modeFilter, setModeFilter] = useState('');
   const [genreFilter, setGenreFilter] = useState('');
   const [yearFilter, setYearFilter] = useState('');
   const navigate = useNavigate();
@@ -43,10 +43,10 @@ export const HomePage = () => {
     new Set(songs.map((song) => song.album).filter(Boolean))
   ).sort((a, b) => a.localeCompare(b));
 
-  const languageOptions = Array.from(
+  const modeOptions = Array.from(
     new Set(
       songs
-        .map((song) => String(song.language ?? '').trim())
+        .map((song) => String(song.mode ?? '').trim())
         .filter((value) => value !== '')
     )
   ).sort((a, b) => a.localeCompare(b));
@@ -59,20 +59,25 @@ export const HomePage = () => {
     )
   ).sort((a, b) => a - b);
 
-  const genreOptions = Array.from(
-    new Set(
-      songs
-        .flatMap((song) => song.genres ?? [])
-        .map((genre) => String(genre).trim())
-        .filter((value) => value !== '')
-    )
-  ).sort((a, b) => a.localeCompare(b));
+  const songGenreSet = new Set(
+    songs
+      .flatMap((song) => song.genres ?? [])
+      .map((genre) => String(genre).trim())
+      .filter((value) => value !== '')
+  );
+  const groupedGenreOptions = GENRE_GROUPS.map((group) => ({
+    ...group,
+    options: group.options.filter((genre) => songGenreSet.has(genre)),
+  })).filter((group) => group.options.length > 0);
+  const ungroupedGenreOptions = Array.from(songGenreSet)
+    .filter((genre) => !GENRE_OPTIONS.includes(genre))
+    .sort((a, b) => a.localeCompare(b));
 
   const hasActiveTagFilters =
     artistOriginalFilter.trim() !== '' ||
     interpretVersionFilter.trim() !== '' ||
     albumFilter.trim() !== '' ||
-    languageFilter.trim() !== '' ||
+    modeFilter.trim() !== '' ||
     genreFilter.trim() !== '' ||
     yearFilter.trim() !== '';
 
@@ -80,6 +85,53 @@ export const HomePage = () => {
     runningNumber === null || runningNumber === undefined
       ? ''
       : String(runningNumber).padStart(4, '0');
+
+  const SEARCH_STOP_WORDS = new Set([
+    'the',
+    'a',
+    'an',
+    'and',
+    'of',
+    'to',
+    'in',
+    'on',
+    'at',
+    'for',
+    'from',
+    'with',
+    'by',
+    'der',
+    'die',
+    'das',
+    'den',
+    'dem',
+    'des',
+    'ein',
+    'eine',
+    'einer',
+    'einem',
+    'einen',
+    'eines',
+    'und',
+    'im',
+    'am',
+    'zu',
+    'zur',
+    'zum',
+    'von',
+    'vom',
+    'mit',
+  ]);
+
+  const normalizeSearchText = (value: string | null | undefined) =>
+    String(value ?? '')
+      .toLowerCase()
+      .replace(/[^a-z0-9äöüß]+/gi, ' ')
+      .split(/\s+/)
+      .filter((word) => word !== '' && !SEARCH_STOP_WORDS.has(word))
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
 
   const handleClick = (id: number) => {
     navigate(`/song/${encodeURIComponent(String(id))}`);
@@ -175,10 +227,19 @@ export const HomePage = () => {
 
   useEffect(() => {
     const q = query.trim().toLowerCase();
+    const textQuery = normalizeSearchText(query);
     const numberQuery = q.startsWith('#') ? q.slice(1) : q;
     const f = songs.filter((s) => {
       const runningNumber = String(s.runningNumber ?? '');
       const paddedRunningNumber = toPaddedRunningNumber(s.runningNumber);
+      const searchableText = normalizeSearchText(
+        [
+          s.name,
+          s.artist,
+          s.interpretVersion ?? '',
+          s.album,
+        ].join(' ')
+      );
       const matchesQuery =
         runningNumber.includes(q) ||
         paddedRunningNumber.includes(q) ||
@@ -186,12 +247,8 @@ export const HomePage = () => {
         paddedRunningNumber.includes(numberQuery) ||
         `#${runningNumber}`.includes(q) ||
         `#${paddedRunningNumber}`.includes(q) ||
-        s.name.toLowerCase().includes(q) ||
-        s.artist.toLowerCase().includes(q) ||
-        String(s.interpretVersion ?? '')
-          .toLowerCase()
-          .includes(q) ||
-        s.album.toLowerCase().includes(q);
+        (q === '' || textQuery !== '') &&
+        searchableText.includes(textQuery);
 
       if (!matchesQuery) return false;
 
@@ -206,10 +263,10 @@ export const HomePage = () => {
       const matchesAlbum =
         albumFilter.trim() === '' ||
         s.album.toLowerCase() === albumFilter.toLowerCase();
-      const matchesLanguage =
-        languageFilter.trim() === '' ||
-        String(s.language ?? '').toLowerCase() ===
-          languageFilter.trim().toLowerCase();
+      const matchesMode =
+        modeFilter.trim() === '' ||
+        String(s.mode ?? '').trim().toLowerCase() ===
+          modeFilter.trim().toLowerCase();
       const matchesGenre =
         genreFilter.trim() === '' ||
         (s.genres ?? [])
@@ -222,7 +279,7 @@ export const HomePage = () => {
         matchesArtistOriginal &&
         matchesInterpretVersion &&
         matchesAlbum &&
-        matchesLanguage &&
+        matchesMode &&
         matchesGenre &&
         matchesYear
       );
@@ -234,7 +291,7 @@ export const HomePage = () => {
     artistOriginalFilter,
     interpretVersionFilter,
     albumFilter,
-    languageFilter,
+    modeFilter,
     genreFilter,
     yearFilter,
   ]);
@@ -245,7 +302,7 @@ export const HomePage = () => {
   const canAdminEdit = isAdmin && isOnline;
 
   return (
-    <div className="page">
+    <div className="page home-page">
       {isOffline && (
         <div className="offline-banner">
           Offline-Modus aktiv: Es werden nur gecachte Songs angezeigt
@@ -358,19 +415,19 @@ export const HomePage = () => {
                 ))}
               </select>
 
-              <label className="filter-label" htmlFor="language-filter">
-                Sprache
+              <label className="filter-label" htmlFor="mode-filter">
+                Modus
               </label>
               <select
-                id="language-filter"
+                id="mode-filter"
                 className="filter-control"
-                value={languageFilter}
-                onChange={(e) => setLanguageFilter(e.target.value)}
+                value={modeFilter}
+                onChange={(e) => setModeFilter(e.target.value)}
               >
                 <option value="">Alle</option>
-                {languageOptions.map((language) => (
-                  <option key={language} value={language}>
-                    {language}
+                {modeOptions.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {mode}
                   </option>
                 ))}
               </select>
@@ -402,11 +459,24 @@ export const HomePage = () => {
                 onChange={(e) => setGenreFilter(e.target.value)}
               >
                 <option value="">Alle</option>
-                {genreOptions.map((genre) => (
-                  <option key={genre} value={genre}>
-                    {genre}
-                  </option>
+                {groupedGenreOptions.map((group) => (
+                  <optgroup key={group.label} label={group.label}>
+                    {group.options.map((genre) => (
+                      <option key={genre} value={genre}>
+                        {genre}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
+                {ungroupedGenreOptions.length > 0 && (
+                  <optgroup label="Weitere">
+                    {ungroupedGenreOptions.map((genre) => (
+                      <option key={genre} value={genre}>
+                        {genre}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
 
               <button
@@ -416,7 +486,7 @@ export const HomePage = () => {
                   setArtistOriginalFilter('');
                   setInterpretVersionFilter('');
                   setAlbumFilter('');
-                  setLanguageFilter('');
+                  setModeFilter('');
                   setGenreFilter('');
                   setYearFilter('');
                 }}
@@ -432,62 +502,64 @@ export const HomePage = () => {
       {filtered.length === 0 ? (
         <p>Keine Songs gefunden.</p>
       ) : (
-        <ul className="song-list">
-          {filtered.map((song) => (
-            <li key={song.id} className="song-item">
-              <button
-                onClick={() => handleClick(song.id)}
-                className="song-item-btn"
-              >
-                <span className="song-item-content">
-                  <span className="song-main-row">
-                    <span className="song-main-text">
-                      {song.name} - {song.artist}
-                    </span>
-                    <span className="song-main-number">
-                      {song.runningNumber !== null && song.runningNumber !== undefined
-                        ? `#${toPaddedRunningNumber(song.runningNumber)}`
-                        : '#-'}
+        <div className="song-list-scroll">
+          <ul className="song-list">
+            {filtered.map((song) => (
+              <li key={song.id} className="song-item">
+                <button
+                  onClick={() => handleClick(song.id)}
+                  className="song-item-btn"
+                >
+                  <span className="song-item-content">
+                    <span className="song-main-row">
+                      <span className="song-main-text">
+                        {song.name} - {song.artist}
+                      </span>
+                      <span className="song-main-number">
+                        {song.runningNumber !== null && song.runningNumber !== undefined
+                          ? `#${toPaddedRunningNumber(song.runningNumber)}`
+                          : '#-'}
+                      </span>
                     </span>
                   </span>
-                </span>
-              </button>
+                </button>
 
-              {canAdminEdit && (
-                <div className="song-item-actions">
-                  <button
-                    onClick={() => navigate(`/song/${song.id}/edit`)}
-                    className="song-small-btn btn-overwrite icon-only-btn"
-                    disabled={busySongId === song.id}
-                    title="Song bearbeiten"
-                    aria-label="Song bearbeiten"
-                  >
-                    <svg viewBox="0 0 24 24" className="song-action-icon" aria-hidden="true">
-                      <path
-                        fill="currentColor"
-                        d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a1.003 1.003 0 0 0 0-1.42l-2.5-2.5a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 2-1.66z"
-                      />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => handleDeleteSong(song)}
-                    className="song-small-btn btn-delete icon-only-btn"
-                    disabled={busySongId === song.id}
-                    title="Song loeschen"
-                    aria-label="Song loeschen"
-                  >
-                    <svg viewBox="0 0 24 24" className="song-action-icon" aria-hidden="true">
-                      <path
-                        fill="currentColor"
-                        d="M6 7h12l-1 14H7L6 7zm3-3h6l1 2h4v2H4V6h4l1-2z"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
+                {canAdminEdit && (
+                  <div className="song-item-actions">
+                    <button
+                      onClick={() => navigate(`/song/${song.id}/edit`)}
+                      className="song-small-btn btn-overwrite icon-only-btn"
+                      disabled={busySongId === song.id}
+                      title="Song bearbeiten"
+                      aria-label="Song bearbeiten"
+                    >
+                      <svg viewBox="0 0 24 24" className="song-action-icon" aria-hidden="true">
+                        <path
+                          fill="currentColor"
+                          d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a1.003 1.003 0 0 0 0-1.42l-2.5-2.5a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 2-1.66z"
+                        />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => handleDeleteSong(song)}
+                      className="song-small-btn btn-delete icon-only-btn"
+                      disabled={busySongId === song.id}
+                      title="Song loeschen"
+                      aria-label="Song loeschen"
+                    >
+                      <svg viewBox="0 0 24 24" className="song-action-icon" aria-hidden="true">
+                        <path
+                          fill="currentColor"
+                          d="M6 7h12l-1 14H7L6 7zm3-3h6l1 2h4v2H4V6h4l1-2z"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );

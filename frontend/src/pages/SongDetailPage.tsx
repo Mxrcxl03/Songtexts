@@ -9,15 +9,15 @@ import type { User } from '../types/user';
 import UserService from '../services/user.service';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { buildChordLine } from '../utils/buildChordLine';
-import { getRefrainUnderlineFlags, isRefrainEndLine, isSongPartLine } from '../utils/songPart';
+import { getRefrainUnderlineFlags, getVisibleSongLineEntries } from '../utils/songPart';
 
 const toDisplayString = (value: string | number | null | undefined): string => {
   if (value === null || value === undefined) return '';
   return String(value).trim();
 };
-const toBracketValue = (value: string | number | null | undefined): string => {
+const toMetaValue = (value: string | number | null | undefined): string => {
   const display = toDisplayString(value);
-  return `[${display || ' '}]`;
+  return display;
 };
 const toFileNamePart = (value: string | number | null | undefined): string => {
   const base = toDisplayString(value)
@@ -28,35 +28,83 @@ const toFileNamePart = (value: string | number | null | undefined): string => {
   return base || 'song';
 };
 
-const parseAutoScrollMultiplier = (value: string): number | null => {
-  const normalized = value.trim().replace(',', '.');
-  if (!normalized) return null;
+type FullscreenElement = HTMLElement & {
+  webkitRequestFullscreen?: () => Promise<void> | void;
+  msRequestFullscreen?: () => Promise<void> | void;
+};
 
-  const parsed = Number.parseFloat(normalized);
-  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+type FullscreenDocument = Document & {
+  webkitFullscreenElement?: Element | null;
+  msFullscreenElement?: Element | null;
+  webkitExitFullscreen?: () => Promise<void> | void;
+  msExitFullscreen?: () => Promise<void> | void;
+};
 
-  return Math.round(parsed * 10) / 10;
+const getFullscreenElement = (): Element | null => {
+  const doc = document as FullscreenDocument;
+  return document.fullscreenElement ?? doc.webkitFullscreenElement ?? doc.msFullscreenElement ?? null;
+};
+
+const canUseFullscreen = (): boolean => {
+  const root = document.documentElement as FullscreenElement;
+  const doc = document as FullscreenDocument;
+  return Boolean(
+    root.requestFullscreen
+    || root.webkitRequestFullscreen
+    || root.msRequestFullscreen
+    || document.exitFullscreen
+    || doc.webkitExitFullscreen
+    || doc.msExitFullscreen
+  );
+};
+
+const requestFullscreen = async () => {
+  const root = document.documentElement as FullscreenElement;
+  const request =
+    root.requestFullscreen ?? root.webkitRequestFullscreen ?? root.msRequestFullscreen;
+  await request?.call(root);
+};
+
+const exitFullscreen = async () => {
+  const doc = document as FullscreenDocument;
+  const exit = document.exitFullscreen ?? doc.webkitExitFullscreen ?? doc.msExitFullscreen;
+  await exit?.call(document);
 };
 
 function SongLineViewRow({
   line,
-  lyricLineNumber,
   underlineText,
-}: Readonly<{ line: SongLine; lyricLineNumber: number | null; underlineText: boolean }>) {
-  const text = line?.text ?? '';
+  stropheNumber,
+  startsAfterStropheEnd,
+  displayText,
+  underlineDisplayText,
+  isDisplayedSongPart,
+  isBackgroundContent,
+  isInstrumentalSongPart,
+}: Readonly<{
+  line: SongLine;
+  underlineText: boolean;
+  stropheNumber: number | null;
+  startsAfterStropheEnd: boolean;
+  displayText: string | null;
+  underlineDisplayText: boolean;
+  isDisplayedSongPart: boolean;
+  isBackgroundContent: boolean;
+  isInstrumentalSongPart: boolean;
+}>) {
+  const text = displayText ?? line?.text ?? '';
   const chordLine = buildChordLine(text, line?.chordAnnotations ?? []);
-  const songPartLine = isSongPartLine(text);
 
   return (
-    <div className="lyrics-editor-textline lyrics-editor-textline-readonly">
-      <span
-        className={
-          songPartLine
-            ? 'lyrics-line-number-static is-song-part-line'
-            : 'lyrics-line-number-static'
-        }
-      >
-        {songPartLine ? '' : lyricLineNumber}
+    <div
+      className={
+        startsAfterStropheEnd
+          ? 'lyrics-editor-textline lyrics-editor-textline-readonly is-after-strophe-end'
+          : 'lyrics-editor-textline lyrics-editor-textline-readonly'
+      }
+    >
+      <span className="lyrics-line-number-static is-strophe-number">
+        {stropheNumber === null ? '' : `${stropheNumber}.`}
       </span>
       <div className="lyrics-line-stack">
         <div className="lyrics-chord-layer" aria-hidden="true">
@@ -66,9 +114,14 @@ function SongLineViewRow({
         </div>
         <div
           className={
-            underlineText
-              ? 'lyrics-text-layer is-refrain-underlined'
-              : 'lyrics-text-layer'
+            [
+              'lyrics-text-layer',
+              underlineDisplayText ? 'is-refrain-underlined' : '',
+              underlineText ? 'is-refrain-emphasized' : '',
+              isDisplayedSongPart ? 'is-songpart-display' : '',
+              isBackgroundContent ? 'is-background-content' : '',
+              isInstrumentalSongPart ? 'is-instrumental-songpart' : '',
+            ].filter(Boolean).join(' ')
           }
         >
           <pre className="lyrics-line-readonly lyrics-line-readonly-text">{text || '\u00A0'}</pre>
@@ -79,8 +132,10 @@ function SongLineViewRow({
 }
 
 export function SongDetailPage() {
-  const AUTO_SCROLL_PX_PER_SECOND = 42;
-  const DEFAULT_AUTO_SCROLL_MULTIPLIER = 1;
+  const AUTO_SCROLL_PX_PER_SECOND = 18;
+  const MIN_AUTO_SCROLL_SPEED = 0.2;
+  const MAX_AUTO_SCROLL_SPEED = 2;
+  const AUTO_SCROLL_SPEED_STEP = 0.1;
   const isOnline = useOnlineStatus();
   const isOffline = !isOnline;
   const { id } = useParams<{ id: string }>();
@@ -90,10 +145,13 @@ export function SongDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [autoScrollActive, setAutoScrollActive] = useState(false);
-  const [autoScrollSpeedInput, setAutoScrollSpeedInput] = useState('1');
+  const [autoScrollSpeed, setAutoScrollSpeed] = useState(1);
+  const [fullscreenSupported, setFullscreenSupported] = useState(false);
+  const [fullscreenActive, setFullscreenActive] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const autoScrollFrameRef = useRef<number | null>(null);
   const autoScrollLastTsRef = useRef<number | null>(null);
+  const autoScrollRemainderRef = useRef(0);
   const downloadSongAsDocx = async () => {
     if (!song) return;
     try {
@@ -164,6 +222,7 @@ export function SongDetailPage() {
         autoScrollFrameRef.current = null;
       }
       autoScrollLastTsRef.current = null;
+      autoScrollRemainderRef.current = 0;
       return;
     }
 
@@ -183,10 +242,15 @@ export function SongDetailPage() {
         return;
       }
 
-      const speedMultiplier =
-        parseAutoScrollMultiplier(autoScrollSpeedInput) ?? DEFAULT_AUTO_SCROLL_MULTIPLIER;
-      const pixelsToScroll = (AUTO_SCROLL_PX_PER_SECOND * speedMultiplier * deltaMs) / 1000;
-      globalThis.scrollTo(0, Math.min(maxScrollTop, currentScrollTop + pixelsToScroll));
+      const rawPixelsToScroll =
+        autoScrollRemainderRef.current
+        + (AUTO_SCROLL_PX_PER_SECOND * autoScrollSpeed * deltaMs) / 1000;
+      const pixelsToScroll = Math.floor(rawPixelsToScroll);
+      autoScrollRemainderRef.current = rawPixelsToScroll - pixelsToScroll;
+
+      if (pixelsToScroll > 0) {
+        globalThis.scrollTo(0, Math.min(maxScrollTop, currentScrollTop + pixelsToScroll));
+      }
       autoScrollFrameRef.current = requestAnimationFrame(step);
     };
 
@@ -198,8 +262,49 @@ export function SongDetailPage() {
         autoScrollFrameRef.current = null;
       }
       autoScrollLastTsRef.current = null;
+      autoScrollRemainderRef.current = 0;
     };
-  }, [autoScrollActive, autoScrollSpeedInput]);
+  }, [autoScrollActive, autoScrollSpeed]);
+
+  useEffect(() => {
+    setFullscreenSupported(canUseFullscreen());
+    const updateFullscreenState = () => {
+      const isActive = getFullscreenElement() !== null;
+      setFullscreenActive(isActive);
+      document.body.classList.toggle('song-fullscreen-active', isActive);
+    };
+
+    updateFullscreenState();
+    document.addEventListener('fullscreenchange', updateFullscreenState);
+    document.addEventListener('webkitfullscreenchange', updateFullscreenState);
+    document.addEventListener('MSFullscreenChange', updateFullscreenState);
+    return () => {
+      document.removeEventListener('fullscreenchange', updateFullscreenState);
+      document.removeEventListener('webkitfullscreenchange', updateFullscreenState);
+      document.removeEventListener('MSFullscreenChange', updateFullscreenState);
+      document.body.classList.remove('song-fullscreen-active');
+    };
+  }, []);
+
+  const toggleFullscreen = async () => {
+    if (!fullscreenSupported) return;
+    try {
+      if (getFullscreenElement()) {
+        await exitFullscreen();
+      } else {
+        await requestFullscreen();
+      }
+    } catch {
+      setError('Vollbildmodus konnte nicht geaendert werden.');
+    }
+  };
+
+  const changeAutoScrollSpeed = (delta: number) => {
+    setAutoScrollSpeed((current) => {
+      const next = Math.round((current + delta) * 10) / 10;
+      return Math.min(MAX_AUTO_SCROLL_SPEED, Math.max(MIN_AUTO_SCROLL_SPEED, next));
+    });
+  };
 
   if (loading) return <p>Laedt...</p>;
   if (error) return <p style={{ color: 'crimson' }}>Fehler: {error}</p>;
@@ -230,27 +335,17 @@ export function SongDetailPage() {
     song.runningNumber === null || song.runningNumber === undefined
       ? ''
       : String(song.runningNumber).padStart(4, '0');
+  const modeDisplay = toDisplayString(song.mode);
   const genresDisplay = (song.genres ?? []).join(', ');
   const allLines = song.lines ?? [];
   const refrainUnderlineFlags = getRefrainUnderlineFlags(allLines);
-  const visibleLines = allLines
-    .map((line, index) => ({ line, originalIndex: index }))
-    .filter(({ line }) => !isRefrainEndLine(line.text ?? ''));
-  let lyricLineCounter = 0;
-  const lyricLineNumbers = visibleLines.map(({ line }) => {
-    if (isSongPartLine(line.text ?? '')) return null;
-    lyricLineCounter += 1;
-    return lyricLineCounter;
-  });
-
+  const visibleLines = getVisibleSongLineEntries(allLines);
   return (
-    <div className="page">
+    <div className="page song-detail-page">
       {isOffline && <div className="offline-banner">Offline-Modus aktiv: Song ist nur lesbar.</div>}
 
       <div className="header-row">
-        <h2 className="no-margin">
-          #{songNumberDisplay || '-'} {song.name}
-        </h2>
+        <h2 className="no-margin">{song.name}</h2>
         <div className="header-actions">
           {canAdminEdit && (
             <button
@@ -284,63 +379,63 @@ export function SongDetailPage() {
         <div className="song-meta-column">
           <p className="song-meta-item">
             <strong className="song-meta-item-label">Song-Nr.:</strong>
-            <span className="song-meta-item-value">{toBracketValue(songNumberDisplay)}</span>
+            <span className="song-meta-item-value">{toMetaValue(songNumberDisplay)}</span>
           </p>
           <p className="song-meta-item">
             <strong className="song-meta-item-label">Song-Titel:</strong>
-            <span className="song-meta-item-value">{toBracketValue(song.name)}</span>
+            <span className="song-meta-item-value">{toMetaValue(song.name)}</span>
           </p>
           <p className="song-meta-item">
             <strong className="song-meta-item-label">Interpret (Original):</strong>
-            <span className="song-meta-item-value">{toBracketValue(song.artist)}</span>
+            <span className="song-meta-item-value">{toMetaValue(song.artist)}</span>
           </p>
           <p className="song-meta-item">
             <strong className="song-meta-item-label">Interpret (Version):</strong>
-            <span className="song-meta-item-value">{toBracketValue(song.interpretVersion)}</span>
+            <span className="song-meta-item-value">{toMetaValue(song.interpretVersion)}</span>
           </p>
           <p className="song-meta-item">
             <strong className="song-meta-item-label">Album:</strong>
-            <span className="song-meta-item-value">{toBracketValue(song.album)}</span>
+            <span className="song-meta-item-value">{toMetaValue(song.album)}</span>
           </p>
         </div>
         <div className="song-meta-column">
           <p className="song-meta-item">
             <strong className="song-meta-item-label">Jahr:</strong>
-            <span className="song-meta-item-value">{toBracketValue(song.songYear)}</span>
+            <span className="song-meta-item-value">{toMetaValue(song.songYear)}</span>
           </p>
           <p className="song-meta-item">
             <strong className="song-meta-item-label">Komponist:</strong>
-            <span className="song-meta-item-value">{toBracketValue(song.composer)}</span>
+            <span className="song-meta-item-value">{toMetaValue(song.composer)}</span>
           </p>
           <p className="song-meta-item">
-            <strong className="song-meta-item-label">Produzent(en):</strong>
-            <span className="song-meta-item-value">{toBracketValue(song.producer)}</span>
+            <strong className="song-meta-item-label">Produzent:</strong>
+            <span className="song-meta-item-value">{toMetaValue(song.producer)}</span>
           </p>
           <p className="song-meta-item">
             <strong className="song-meta-item-label">Genre:</strong>
-            <span className="song-meta-item-value">{toBracketValue(genresDisplay)}</span>
+            <span className="song-meta-item-value">{toMetaValue(genresDisplay)}</span>
           </p>
         </div>
         <div className="song-meta-column">
           <p className="song-meta-item">
             <strong className="song-meta-item-label">Key:</strong>
-            <span className="song-meta-item-value">{toBracketValue(keyDisplay)}</span>
+            <span className="song-meta-item-value">{toMetaValue(keyDisplay)}</span>
           </p>
           <p className="song-meta-item">
-            <strong className="song-meta-item-label">Sprache:</strong>
-            <span className="song-meta-item-value">{toBracketValue(song.language)}</span>
+            <strong className="song-meta-item-label">Modus:</strong>
+            <span className="song-meta-item-value">{toMetaValue(modeDisplay)}</span>
           </p>
           <p className="song-meta-item">
             <strong className="song-meta-item-label">Capo:</strong>
-            <span className="song-meta-item-value">{toBracketValue(capoWithPlay)}</span>
+            <span className="song-meta-item-value">{toMetaValue(capoWithPlay)}</span>
           </p>
           <p className="song-meta-item">
             <strong className="song-meta-item-label">Taktart:</strong>
-            <span className="song-meta-item-value">{toBracketValue(taktartDisplay)}</span>
+            <span className="song-meta-item-value">{toMetaValue(taktartDisplay)}</span>
           </p>
           <p className="song-meta-item">
             <strong className="song-meta-item-label">Kadenz:</strong>
-            <span className="song-meta-item-value">{toBracketValue(song.cadence)}</span>
+            <span className="song-meta-item-value">{toMetaValue(song.cadence)}</span>
           </p>
         </div>
       </div>
@@ -348,48 +443,102 @@ export function SongDetailPage() {
       <h3>Text:</h3>
       <div className="lyrics-editor-readonly">
         <div className="textarea-chords lyrics-chord-surface lyrics-chord-surface-readonly">
-          {visibleLines.map(({ line, originalIndex }, index) => (
+          <div className="lyrics-readonly-title">{song.name}</div>
+          {visibleLines.map(({
+            line,
+            originalIndex,
+            stropheNumber,
+            startsAfterStropheEnd,
+            displayText,
+            underlineDisplayText,
+            isDisplayedSongPart,
+            isBackgroundContent,
+            isInstrumentalSongPart,
+          }, index) => (
             <SongLineViewRow
               key={line.id ?? index}
               line={line}
-              lyricLineNumber={lyricLineNumbers[index]}
               underlineText={refrainUnderlineFlags[originalIndex] ?? false}
+              stropheNumber={stropheNumber}
+              startsAfterStropheEnd={startsAfterStropheEnd}
+              displayText={displayText}
+              underlineDisplayText={underlineDisplayText}
+              isDisplayedSongPart={isDisplayedSongPart}
+              isBackgroundContent={isBackgroundContent}
+              isInstrumentalSongPart={isInstrumentalSongPart}
             />
           ))}
         </div>
       </div>
-      <div className="song-autoscroll-controls">
-        <label htmlFor="autoscroll-speed-input">AutoScroll</label>
-        <div className="song-autoscroll-speed-row">
-          <input
-            id="autoscroll-speed-input"
-            type="text"
-            inputMode="decimal"
-            value={autoScrollSpeedInput}
-            onChange={(event) => setAutoScrollSpeedInput(event.target.value)}
-            onBlur={() => {
-              const parsed = parseAutoScrollMultiplier(autoScrollSpeedInput);
-              setAutoScrollSpeedInput(
-                parsed === null ? String(DEFAULT_AUTO_SCROLL_MULTIPLIER) : parsed.toFixed(1).replace('.', ',')
-              );
-            }}
-            className="text-input song-autoscroll-speed-input"
-            aria-label="AutoScroll Geschwindigkeit"
-          />
-          <span>x</span>
+      <div className="song-lyrics-footer" aria-label="Lyrics Steuerung">
+        <button
+          type="button"
+          className="song-footer-btn song-footer-icon-btn"
+          onClick={() => navigate(-1)}
+          aria-label="Zurueck"
+          title="Zurueck"
+        >
+          <svg viewBox="0 0 24 24" className="song-action-icon" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M20 11H7.83l5.59-5.59L12 4 4 12l8 8 1.42-1.41L7.83 13H20v-2z"
+            />
+          </svg>
+        </button>
+        <button
+          type="button"
+          className={
+            fullscreenActive
+              ? 'song-footer-btn song-footer-fullscreen-btn is-active'
+              : 'song-footer-btn song-footer-fullscreen-btn'
+          }
+          onClick={toggleFullscreen}
+          disabled={!fullscreenSupported}
+          title={
+            fullscreenSupported
+              ? fullscreenActive ? 'Vollbild verlassen' : 'Vollbild'
+              : 'Vollbild wird von diesem Browser nicht unterstuetzt'
+          }
+          aria-label={fullscreenActive ? 'Vollbild verlassen' : 'Vollbild aktivieren'}
+        >
+          {fullscreenActive ? 'Normal' : 'Vollbild'}
+        </button>
+        <div className="song-footer-tempo-controls">
+          <span className="song-footer-control-label">Tempo</span>
+          <div className="song-footer-control-row">
+            <button
+              type="button"
+              className="song-footer-step-btn"
+              onClick={() => changeAutoScrollSpeed(-AUTO_SCROLL_SPEED_STEP)}
+              disabled={autoScrollSpeed <= MIN_AUTO_SCROLL_SPEED}
+              aria-label="AutoScroll langsamer"
+            >
+              -
+            </button>
+            <span className="song-footer-control-value">{autoScrollSpeed.toFixed(1).replace('.', ',')}x</span>
+            <button
+              type="button"
+              className="song-footer-step-btn"
+              onClick={() => changeAutoScrollSpeed(AUTO_SCROLL_SPEED_STEP)}
+              disabled={autoScrollSpeed >= MAX_AUTO_SCROLL_SPEED}
+              aria-label="AutoScroll schneller"
+            >
+              +
+            </button>
+          </div>
         </div>
+        <button
+          type="button"
+          className={
+            autoScrollActive
+              ? 'song-footer-btn song-footer-scroll-btn is-active'
+              : 'song-footer-btn song-footer-scroll-btn'
+          }
+          onClick={() => setAutoScrollActive((current) => !current)}
+        >
+          {autoScrollActive ? 'Stop' : 'Scroll'}
+        </button>
       </div>
-      <button
-        type="button"
-        className={
-          autoScrollActive
-            ? 'song-autoscroll-btn is-active'
-            : 'song-autoscroll-btn'
-        }
-        onClick={() => setAutoScrollActive((current) => !current)}
-      >
-        {autoScrollActive ? 'AutoScroll stoppen' : 'AutoScroll'}
-      </button>
     </div>
   );
 }

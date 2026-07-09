@@ -80,6 +80,28 @@ class DocumentImportServiceTest {
     }
 
     @Test
+    void parseParagraphs_keepsStropheMarkersAsSongPartLines() {
+        SongRequest parsed = service.parseParagraphs(
+                List.of(
+                        "Titel: Strophen",
+                        "Interpret (Original): Artist",
+                        "Album: Album",
+                        "",
+                        "[Strophe]",
+                        "<Dm>I see a red door",
+                        "[Strophe End]"),
+                "strophen.docx");
+
+        assertEquals(3, parsed.getLines().size());
+        assertEquals("[Strophe]", parsed.getLines().get(0).getText());
+        assertTrue(parsed.getLines().get(0).getChordAnnotations().isEmpty());
+        assertEquals("I see a red door", parsed.getLines().get(1).getText());
+        assertEquals("Dm", parsed.getLines().get(1).getChordAnnotations().get(0).getName());
+        assertEquals("[Strophe End]", parsed.getLines().get(2).getText());
+        assertTrue(parsed.getLines().get(2).getChordAnnotations().isEmpty());
+    }
+
+    @Test
     void parseParagraphs_usesFallbackValuesWhenMissing() {
         SongRequest parsed = service.parseParagraphs(List.of(), "mein-song.docx");
 
@@ -108,9 +130,10 @@ class DocumentImportServiceTest {
                         "Key: Dm (harm.)",
                         "Play: C",
                         "Capo: -",
-                        "Sprache: English",
+                        "Sprache: Deutsch",
+                        "Modus: Dur",
                         "Kadenz: i-iv-v",
-                        "Genres: Rock, Worship; Pop",
+                        "Genres: Pop/ Rock english, Country; Punk",
                         "",
                         "<Dm>Zeile <A>eins"),
                 "ignored.docx");
@@ -129,15 +152,35 @@ class DocumentImportServiceTest {
         assertEquals("harm.", parsed.getKeySuffix());
         assertEquals("C", parsed.getPlay());
         assertEquals(-1, parsed.getCapo());
-        assertEquals("English", parsed.getLanguage());
+        assertEquals("Deutsch", parsed.getLanguage());
+        assertEquals("Dur", parsed.getMode());
         assertEquals("i-iv-v", parsed.getCadence());
-        assertEquals(List.of("Rock", "Worship", "Pop"), parsed.getGenres());
+        assertEquals(List.of("Pop/ Rock english", "Country", "Punk"), parsed.getGenres());
 
         assertEquals(1, parsed.getLines().size());
         assertEquals("Zeile eins", parsed.getLines().get(0).getText());
         assertEquals(2, parsed.getLines().get(0).getChordAnnotations().size());
         assertEquals("Dm", parsed.getLines().get(0).getChordAnnotations().get(0).getName());
         assertEquals("A", parsed.getLines().get(0).getChordAnnotations().get(1).getName());
+    }
+
+    @Test
+    void parseParagraphs_doesNotReadSkalaAsMetadata() {
+        SongRequest parsed = service.parseParagraphs(
+                List.of(
+                        "Titel: Ohne Skala",
+                        "Interpret (Original): Test Artist",
+                        "Album: Test Album",
+                        "Skala: Dur",
+                        "",
+                        "<C>Hallo"),
+                "ignored.docx");
+
+        assertNull(parsed.getMode());
+        assertNull(parsed.getLanguage());
+        assertEquals(3, parsed.getLines().size());
+        assertEquals("Skala: Dur", parsed.getLines().get(0).getText());
+        assertEquals("Hallo", parsed.getLines().get(2).getText());
     }
 
     @Test

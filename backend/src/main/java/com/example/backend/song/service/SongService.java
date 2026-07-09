@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
 
 import com.example.backend.song.domain.Song;
 import com.example.backend.song.domain.SongGenres;
-import com.example.backend.song.domain.SongScales;
+import com.example.backend.song.domain.SongModes;
 import com.example.backend.song.persistence.SongRepository;
 import com.example.backend.song.api.dto.SongRequest;
 import com.example.backend.song.api.dto.SongResponse;
@@ -50,7 +50,7 @@ public class SongService {
                 req.getAlbum(),
                 req.getBpm(),
                 normalizeCapo(req.getCapo()),
-                normalizeLanguage(req.getLanguage()),
+                normalizeOptionalTag(req.getLanguage()),
                 normalizeCadence(req.getCadence()),
                 normalizeInterpretVersion(req.getInterpretVersion()),
                 normalizeSongYear(req.getSongYear()),
@@ -61,7 +61,8 @@ public class SongService {
                 normalizeOptionalTag(req.getKeyRoot()),
                 normalizeOptionalTag(req.getKeySuffix()),
                 normalizeOptionalTag(req.getPlay()));
-        song.setRunningNumber(nextFreeRunningNumber());
+        song.setMode(normalizeMode(req.getMode()));
+        song.setRunningNumber(resolveRunningNumber(req.getRunningNumber(), null));
         song.setGenres(normalizeGenres(req.getGenres()));
 
         List<SongLine> lines = new ArrayList<>();
@@ -132,6 +133,7 @@ public class SongService {
                 s.getBpm(),
                 s.getCapo(),
                 s.getLanguage(),
+                resolveModeForResponse(s),
                 s.getCadence(),
                 s.getInterpretVersion(),
                 s.getSongYear(),
@@ -172,7 +174,8 @@ public class SongService {
         }
         song.setBpm(request.getBpm());
         song.setCapo(normalizeCapo(request.getCapo()));
-        song.setLanguage(normalizeLanguage(request.getLanguage()));
+        song.setLanguage(normalizeOptionalTag(request.getLanguage()));
+        song.setMode(normalizeMode(request.getMode()));
         song.setCadence(normalizeCadence(request.getCadence()));
         song.setInterpretVersion(normalizeInterpretVersion(request.getInterpretVersion()));
         song.setSongYear(normalizeSongYear(request.getSongYear()));
@@ -184,6 +187,7 @@ public class SongService {
         song.setKeySuffix(normalizeOptionalTag(request.getKeySuffix()));
         song.setPlay(normalizeOptionalTag(request.getPlay()));
         song.setGenres(normalizeGenres(request.getGenres()));
+        song.setRunningNumber(resolveRunningNumber(request.getRunningNumber(), song.getId()));
     }
 
     private void applyLineUpdates(Song song, SongRequest request) {
@@ -282,6 +286,7 @@ public class SongService {
                 song.getBpm(),
                 song.getCapo(),
                 song.getLanguage(),
+                resolveModeForResponse(song),
                 song.getCadence(),
                 song.getInterpretVersion(),
                 song.getSongYear(),
@@ -318,32 +323,32 @@ public class SongService {
                         .collect(Collectors.toList()));
     }
 
-    private String normalizeLanguage(String language) {
-        if (language == null || language.isBlank()) {
+    private String normalizeMode(String mode) {
+        if (mode == null || mode.isBlank()) {
             return null;
         }
 
-        String input = language.trim();
+        String input = mode.trim();
         String normalized = input.toLowerCase(Locale.ROOT);
 
-        if ("englisch".equals(normalized) || "english".equals(normalized)) {
-            return "English";
-        }
-        if ("deutsch".equals(normalized) || "german".equals(normalized)) {
-            return "Deutsch";
-        }
-        if ("espanol".equals(normalized) || "spanisch".equals(normalized) || "spanish".equals(normalized)) {
-            return "Espanol";
-        }
-
-        for (String allowed : SongScales.ALLOWED) {
+        for (String allowed : SongModes.ALLOWED) {
             if (allowed.toLowerCase(Locale.ROOT).equals(normalized)) {
                 return allowed;
             }
         }
 
         throw new IllegalArgumentException(
-                "Sprache ist ungueltig. Erlaubt sind: " + String.join(", ", SongScales.ALLOWED));
+                "Modus ist ungueltig. Erlaubt sind: " + String.join(", ", SongModes.ALLOWED));
+    }
+
+    private String resolveModeForResponse(Song song) {
+        if (song == null) {
+            return null;
+        }
+        if (song.getMode() != null && !song.getMode().isBlank()) {
+            return normalizeMode(song.getMode());
+        }
+        return null;
     }
 
     private String normalizeCadence(String cadence) {
@@ -495,7 +500,12 @@ public class SongService {
     }
 
     private Long nextFreeRunningNumber() {
+        return nextFreeRunningNumber(null);
+    }
+
+    private Long nextFreeRunningNumber(Long excludedSongId) {
         Set<Long> used = songRepo.findAll().stream()
+                .filter(song -> excludedSongId == null || !excludedSongId.equals(song.getId()))
                 .map(Song::getRunningNumber)
                 .filter(n -> n != null && n >= MIN_RUNNING_NUMBER && n <= MAX_RUNNING_NUMBER)
                 .collect(Collectors.toSet());
@@ -510,6 +520,24 @@ public class SongService {
         }
 
         return candidate;
+    }
+
+    private Long resolveRunningNumber(Long requestedRunningNumber, Long currentSongId) {
+        if (requestedRunningNumber == null) {
+            return nextFreeRunningNumber(currentSongId);
+        }
+
+        if (requestedRunningNumber < MIN_RUNNING_NUMBER || requestedRunningNumber > MAX_RUNNING_NUMBER) {
+            throw new IllegalArgumentException(
+                    "Songnummer muss zwischen " + MIN_RUNNING_NUMBER + " und " + MAX_RUNNING_NUMBER + " liegen.");
+        }
+
+        Optional<Song> existing = songRepo.findByRunningNumber(requestedRunningNumber);
+        if (existing.isPresent() && (currentSongId == null || !currentSongId.equals(existing.get().getId()))) {
+            throw new IllegalStateException("Songnummer " + requestedRunningNumber + " ist bereits vergeben.");
+        }
+
+        return requestedRunningNumber;
     }
 
     public Song getSongEntity(Long id) {

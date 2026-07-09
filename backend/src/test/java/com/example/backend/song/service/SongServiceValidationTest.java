@@ -36,7 +36,7 @@ class SongServiceValidationTest {
     private SongService songService;
 
     @Test
-    void createSong_normalizesLanguageGenresAndChordPositions() {
+    void createSong_normalizesModeGenresAndChordPositions() {
         Song existing = new Song("Existing", "Old", "Old Album");
         existing.setId(1L);
         existing.setRunningNumber(1L);
@@ -55,7 +55,8 @@ class SongServiceValidationTest {
                 "Album",
                 120,
                 -1,
-                "Englisch",
+                "Deutsch",
+                "dur",
                 " 4/4 ",
                 null,
                 2020,
@@ -66,7 +67,7 @@ class SongServiceValidationTest {
                 null,
                 null,
                 null,
-                List.of(" rock ", "POP", "rock"),
+                List.of(" pop/ rock english ", "COUNTRY", "pop/ rock english"),
                 List.of(new SongLineDTO(
                         null,
                         1,
@@ -76,12 +77,14 @@ class SongServiceValidationTest {
                                 new ChordAnnotationDTO(2, "Dm"),
                                 new ChordAnnotationDTO(2, "Em"),
                                 new ChordAnnotationDTO(50, "G"),
-                                new ChordAnnotationDTO(0, "   ")))));
+                                new ChordAnnotationDTO(0, "   ")))),
+                null);
 
         SongResponse response = songService.createSong(request);
 
-        assertEquals("English", response.getLanguage());
-        assertIterableEquals(List.of("Rock", "Pop"), response.getGenres());
+        assertEquals("Deutsch", response.getLanguage());
+        assertEquals("Dur", response.getMode());
+        assertIterableEquals(List.of("Pop/ Rock english", "Country"), response.getGenres());
         assertEquals(2L, response.getRunningNumber());
         assertEquals(3, response.getLines().get(0).getChordAnnotations().size());
         assertEquals(0, response.getLines().get(0).getChordAnnotations().get(0).getPosition());
@@ -114,8 +117,10 @@ class SongServiceValidationTest {
                 null,
                 null,
                 null,
+                null,
                 List.of(),
-                List.of());
+                List.of(),
+                null);
 
         SongRequest tooManyGenres = new SongRequest(
                 "Artist",
@@ -134,18 +139,129 @@ class SongServiceValidationTest {
                 null,
                 null,
                 null,
-                List.of("Rock", "Pop", "Jazz", "Soul", "Folk"),
-                List.of());
+                null,
+                List.of("Oldies", "70er", "80er", "90er", "2000er"),
+                List.of(),
+                null);
 
         assertThrows(IllegalArgumentException.class, () -> songService.createSong(invalidCapo));
         assertThrows(IllegalArgumentException.class, () -> songService.createSong(tooManyGenres));
     }
 
     @Test
+    void createSong_usesRequestedRunningNumberWhenFree() {
+        when(songRepository.findAll(Sort.by("id").ascending())).thenReturn(List.of());
+        when(songRepository.findByRunningNumber(42L)).thenReturn(Optional.empty());
+        when(songRepository.save(any(Song.class))).thenAnswer(invocation -> {
+            Song song = invocation.getArgument(0);
+            song.setId(100L);
+            return song;
+        });
+
+        SongRequest request = new SongRequest(
+                "Artist",
+                "Name",
+                "Album",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                List.of(),
+                42L);
+
+        SongResponse response = songService.createSong(request);
+
+        assertEquals(42L, response.getRunningNumber());
+    }
+
+    @Test
+    void createSong_doesNotDeriveModeFromLanguage() {
+        when(songRepository.findAll(Sort.by("id").ascending())).thenReturn(List.of());
+        when(songRepository.findAll()).thenReturn(List.of());
+        when(songRepository.save(any(Song.class))).thenAnswer(invocation -> {
+            Song song = invocation.getArgument(0);
+            song.setId(100L);
+            return song;
+        });
+
+        SongRequest request = new SongRequest(
+                "Artist",
+                "Name",
+                "Album",
+                null,
+                null,
+                "Dur",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                List.of(),
+                null);
+
+        SongResponse response = songService.createSong(request);
+
+        assertEquals("Dur", response.getLanguage());
+        assertEquals(null, response.getMode());
+    }
+
+    @Test
+    void createSong_rejectsDuplicateRunningNumber() {
+        Song existing = new Song("Existing", "Old", "Old Album");
+        existing.setId(1L);
+        existing.setRunningNumber(42L);
+
+        when(songRepository.findAll(Sort.by("id").ascending())).thenReturn(List.of(existing));
+        when(songRepository.findByRunningNumber(42L)).thenReturn(Optional.of(existing));
+
+        SongRequest request = new SongRequest(
+                "Artist",
+                "Name",
+                "Album",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                List.of(),
+                42L);
+
+        assertThrows(IllegalStateException.class, () -> songService.createSong(request));
+    }
+
+    @Test
     void updateSong_ignoresUnknownLineIdsAndSortsLinesByOrderIndex() {
         Song song = new Song("Artist", "Old Name", "Album");
         song.setId(7L);
-        song.setLanguage("English");
+        song.setLanguage("Deutsch");
 
         SongLine existingLine = new SongLine("Old line", 1);
         existingLine.setId(11L);
@@ -154,6 +270,7 @@ class SongServiceValidationTest {
         song.setLines(List.of(existingLine));
 
         when(songRepository.findAll(Sort.by("id").ascending())).thenReturn(List.of());
+        when(songRepository.findAll()).thenReturn(List.of(song));
         when(songRepository.findById(7L)).thenReturn(Optional.of(song));
         when(songRepository.save(any(Song.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -174,11 +291,13 @@ class SongServiceValidationTest {
                 null,
                 null,
                 null,
+                null,
                 List.of(),
                 List.of(
                         new SongLineDTO(11L, 2, "Updated existing", List.of(new ChordAnnotationDTO(1, "C"))),
                         new SongLineDTO(999L, 3, "Should be dropped", List.of(new ChordAnnotationDTO(0, "D"))),
-                        new SongLineDTO(null, 1, "Brand new", List.of(new ChordAnnotationDTO(0, "G")))));
+                        new SongLineDTO(null, 1, "Brand new", List.of(new ChordAnnotationDTO(0, "G")))),
+                null);
 
         SongResponse response = songService.updateSong(7L, updateRequest);
 
@@ -197,9 +316,10 @@ class SongServiceValidationTest {
     void updateSong_keepsNameWhenNullButClearsNullableMetadata() {
         Song song = new Song("Artist", "Persisted Name", "Album");
         song.setId(9L);
-        song.setLanguage("English");
+        song.setLanguage("Deutsch");
 
         when(songRepository.findAll(Sort.by("id").ascending())).thenReturn(List.of());
+        when(songRepository.findAll()).thenReturn(List.of(song));
         when(songRepository.findById(9L)).thenReturn(Optional.of(song));
         when(songRepository.save(any(Song.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -220,13 +340,16 @@ class SongServiceValidationTest {
                 null,
                 null,
                 null,
+                null,
                 List.of(),
+                null,
                 null);
 
         SongResponse response = songService.updateSong(9L, updateRequest);
 
         assertEquals("Persisted Name", response.getName());
         assertEquals(null, response.getLanguage());
+        assertEquals(null, response.getMode());
     }
 
     @Test

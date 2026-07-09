@@ -2,11 +2,19 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import axios from 'axios';
 import SongService from '../services/song.service';
+import SongListService from '../services/songList.service';
 import type { Song, SongCreate, SongLine } from '../types/song';
+import type { SongList } from '../types/songList';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { LyricsChordEditor } from '../components/LyricsChordEditor';
-import { GENRE_OPTIONS, MAX_GENRES_PER_SONG } from '../constants/genres';
-import { LANGUAGE_OPTIONS } from '../constants/scales';
+import { GENRE_GROUPS, GENRE_OPTIONS, MAX_GENRES_PER_SONG } from '../constants/genres';
+import { MODE_OPTIONS } from '../constants/modes';
+import {
+  getAssignedSongListIds,
+  getManualSongLists,
+  syncSongListAssignments,
+  toggleSongListSelection,
+} from '../utils/songListAssignments';
 import '../styles/global.css';
 
 const KEY_ROOT_OPTIONS = [
@@ -61,6 +69,7 @@ type SongFormValues = {
   play: string;
   capo: string;
   language: string;
+  mode: string;
   cadence: string;
   genres: string[];
 };
@@ -77,6 +86,14 @@ const toNullableNumber = (value: string): number | null => {
   return Number.isNaN(parsed) ? null : parsed;
 };
 
+const toOptionalPositiveNumber = (value: string): number | null | undefined => {
+  const trimmed = value.trim();
+  if (trimmed === '') return null;
+  if (!/^\d+$/.test(trimmed)) return undefined;
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isNaN(parsed) || parsed < 1 || parsed > 9999 ? undefined : parsed;
+};
+
 const parseCapoInput = (value: string): number | null | undefined => {
   const trimmed = value.trim();
   if (trimmed === '') return null;
@@ -86,20 +103,19 @@ const parseCapoInput = (value: string): number | null | undefined => {
   return Number.isNaN(parsed) ? undefined : parsed;
 };
 
-const normalizeLanguageOption = (value: string | null | undefined): string => {
+const normalizeModeOption = (value: string | null | undefined): string => {
   const trimmed = (value ?? '').trim();
-  const normalized = trimmed.toLowerCase();
-  if (normalized === 'english' || normalized === 'englisch') return 'English';
-  if (normalized === 'deutsch' || normalized === 'german') return 'Deutsch';
-  if (normalized === 'espanol' || normalized === 'spanish' || normalized === 'spanisch') return 'Espanol';
-  return LANGUAGE_OPTIONS.includes(trimmed as (typeof LANGUAGE_OPTIONS)[number]) ? trimmed : '';
+  const match = MODE_OPTIONS.find((option) => option.toLowerCase() === trimmed.toLowerCase());
+  return match ?? '';
 };
 
 const songToPayload = (
   lines: SongLine[],
   values: SongFormValues,
-  capoValue: number | null
+  capoValue: number | null,
+  runningNumberValue: number | null
 ): SongCreate => ({
+  runningNumber: runningNumberValue,
   artist: values.artist,
   interpretVersion: values.interpretVersion.trim() || null,
   composer: values.composer.trim() || null,
@@ -114,6 +130,7 @@ const songToPayload = (
   play: values.play.trim() || null,
   capo: capoValue,
   language: values.language.trim() || null,
+  mode: values.mode.trim() || null,
   cadence: values.cadence.trim() || null,
   genres: values.genres,
   lines,
@@ -139,15 +156,32 @@ export const EditSongPage = () => {
   const [play, setPlay] = useState('');
   const [capo, setCapo] = useState('');
   const [language, setLanguage] = useState('');
+  const [mode, setMode] = useState('');
   const [cadence, setCadence] = useState('');
   const [genres, setGenres] = useState<string[]>([]);
-  const [runningNumber, setRunningNumber] = useState<number | null>(null);
+  const [runningNumber, setRunningNumber] = useState('');
+  const [existingSongs, setExistingSongs] = useState<Song[]>([]);
+  const [songLists, setSongLists] = useState<SongList[]>([]);
+  const [selectedSongListIds, setSelectedSongListIds] = useState<number[]>([]);
   const [lines, setLines] = useState<SongLine[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isValidSongId = useMemo(() => !Number.isNaN(songId), [songId]);
+  const parsedRunningNumber = useMemo(
+    () => toOptionalPositiveNumber(runningNumber),
+    [runningNumber]
+  );
+  const runningNumberConflict = useMemo(() => {
+    if (parsedRunningNumber == null) return null;
+    return (
+      existingSongs.find(
+        (song) => song.id !== songId && song.runningNumber === parsedRunningNumber
+      ) ?? null
+    );
+  }, [existingSongs, parsedRunningNumber, songId]);
+  const manualSongLists = useMemo(() => getManualSongLists(songLists), [songLists]);
   const values: SongFormValues = {
     artist,
     interpretVersion,
@@ -163,6 +197,7 @@ export const EditSongPage = () => {
     play,
     capo,
     language,
+    mode,
     cadence,
     genres,
   };
@@ -174,9 +209,17 @@ export const EditSongPage = () => {
       return;
     }
 
-    SongService.getSongById(songId)
+    Promise.all([
+      SongService.getSongById(songId),
+      SongService.getSongContent(),
+      SongListService.getAllSongLists(),
+    ])
       .then((response) => {
-        const song = response.data as Song;
+        const song = response[0].data as Song;
+        setExistingSongs(response[1].data as Song[]);
+        const loadedSongLists = response[2].data as SongList[];
+        setSongLists(loadedSongLists);
+        setSelectedSongListIds(getAssignedSongListIds(loadedSongLists, songId));
         setArtist(song.artist ?? '');
         setInterpretVersion(song.interpretVersion ?? '');
         setComposer(song.composer ?? '');
@@ -190,10 +233,11 @@ export const EditSongPage = () => {
         setKeySuffix(song.keySuffix ?? '');
         setPlay(song.play ?? '');
         setCapo(song.capo == null ? '' : song.capo === -1 ? '-' : String(song.capo));
-        setLanguage(normalizeLanguageOption(song.language));
+        setLanguage(song.language ?? '');
+        setMode(normalizeModeOption(song.mode));
         setCadence(song.cadence ?? '');
         setGenres(song.genres ?? []);
-        setRunningNumber(song.runningNumber ?? null);
+        setRunningNumber(song.runningNumber == null ? '' : String(song.runningNumber));
         setLines(
           (song.lines ?? []).length > 0
             ? song.lines
@@ -217,7 +261,19 @@ export const EditSongPage = () => {
         setError("Capo muss eine Zahl oder '-' sein.");
         return;
       }
-      await SongService.updateSong(songId, songToPayload(lines, values, parsedCapo));
+      if (parsedRunningNumber === undefined) {
+        setError('Songnummer muss eine Zahl zwischen 1 und 9999 sein.');
+        return;
+      }
+      if (runningNumberConflict) {
+        setError(`Songnummer ${parsedRunningNumber} ist bereits vergeben.`);
+        return;
+      }
+      await SongService.updateSong(
+        songId,
+        songToPayload(lines, values, parsedCapo, parsedRunningNumber)
+      );
+      await syncSongListAssignments(manualSongLists, selectedSongListIds, songId);
       navigate('/');
     } catch (err) {
       setError(getErrorMessage(err, 'Song-Update fehlgeschlagen'));
@@ -237,6 +293,10 @@ export const EditSongPage = () => {
       }
       return [...current, genre];
     });
+  };
+
+  const toggleSongList = (songListId: number) => {
+    setSelectedSongListIds((current) => toggleSongListSelection(current, songListId));
   };
 
   if (!isOnline) {
@@ -261,15 +321,39 @@ export const EditSongPage = () => {
   }
 
   const runningNumberLabel =
-    runningNumber === null || runningNumber === undefined
+    parsedRunningNumber === null || parsedRunningNumber === undefined
       ? null
-      : `#${String(runningNumber).padStart(4, '0')}`;
+      : `#${String(parsedRunningNumber).padStart(4, '0')}`;
 
   return (
     <div className="page page-form">
       <h2>{runningNumberLabel ? `Song ${runningNumberLabel} bearbeiten` : 'Song bearbeiten'}</h2>
       {error && <p className="status-error">Fehler: {error}</p>}
       <form onSubmit={handleSubmit} className="stack-form">
+        <div className="form-field">
+          <label htmlFor="running-number-edit">Songnummer:</label>
+          <input
+            id="running-number-edit"
+            type="number"
+            min={1}
+            max={9999}
+            value={runningNumber}
+            onChange={(e) => setRunningNumber(e.target.value)}
+            placeholder="Leer lassen fuer automatisch"
+            className={`text-input ${parsedRunningNumber === undefined || runningNumberConflict ? 'input-error' : ''}`}
+          />
+          {parsedRunningNumber === undefined && (
+            <p className="field-hint field-hint-error">Bitte eine Zahl zwischen 1 und 9999 eintragen.</p>
+          )}
+          {runningNumberConflict && (
+            <p className="field-hint field-hint-error">
+              Diese Nummer ist bereits vergeben: {runningNumberConflict.name}
+            </p>
+          )}
+          {!runningNumber.trim() && (
+            <p className="field-hint">Ohne Angabe wird automatisch die naechste freie Nummer vergeben.</p>
+          )}
+        </div>
         <div>
           <label>
             Interpret (Original): <span className="required-asterisk">*</span>
@@ -355,11 +439,20 @@ export const EditSongPage = () => {
         </div>
         <div>
           <label>Sprache:</label>
-          <select value={language} onChange={(e) => setLanguage(e.target.value)} className="text-input">
+          <input
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            placeholder="z. B. Deutsch, Englisch, Spanisch"
+            className="text-input"
+          />
+        </div>
+        <div>
+          <label>Modus:</label>
+          <select value={mode} onChange={(e) => setMode(e.target.value)} className="text-input">
             <option value="">Keine Angabe</option>
-            {LANGUAGE_OPTIONS.map((languageOption) => (
-              <option key={languageOption} value={languageOption}>
-                {languageOption}
+            {MODE_OPTIONS.map((modeOption) => (
+              <option key={modeOption} value={modeOption}>
+                {modeOption}
               </option>
             ))}
           </select>
@@ -374,19 +467,47 @@ export const EditSongPage = () => {
             {GENRE_OPTIONS.length} Genres insgesamt)
           </label>
           <div className="genre-checkbox-grid">
-            {GENRE_OPTIONS.map((genre) => (
-              <label key={genre} className="genre-checkbox-item">
-                <input
-                  type="checkbox"
-                  checked={genres.includes(genre)}
-                  onChange={() => toggleGenre(genre)}
-                  disabled={!genres.includes(genre) && genres.length >= MAX_GENRES_PER_SONG}
-                />
-                <span>{genre}</span>
-              </label>
+            {GENRE_GROUPS.map((group) => (
+              <section key={group.label} className="genre-checkbox-group">
+                <h4>{group.label}</h4>
+                <div className="genre-checkbox-group-options">
+                  {group.options.map((genre) => (
+                    <label key={genre} className="genre-checkbox-item">
+                      <input
+                        type="checkbox"
+                        checked={genres.includes(genre)}
+                        onChange={() => toggleGenre(genre)}
+                        disabled={!genres.includes(genre) && genres.length >= MAX_GENRES_PER_SONG}
+                      />
+                      <span>{genre}</span>
+                    </label>
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
         </div>
+        <div className="form-field">
+          <label>Songlisten:</label>
+          {manualSongLists.length > 0 ? (
+            <div className="song-list-checkbox-grid">
+              {manualSongLists.map((songList) => (
+                <label key={songList.id} className="song-list-checkbox-item">
+                  <input
+                    type="checkbox"
+                    checked={selectedSongListIds.includes(songList.id)}
+                    onChange={() => toggleSongList(songList.id)}
+                    disabled={isSubmitting}
+                  />
+                  <span>{songList.name}</span>
+                </label>
+              ))}
+            </div>
+          ) : (
+            <p className="field-hint">Keine manuellen Songlisten vorhanden.</p>
+          )}
+        </div>
+
         <div className="form-field">
           <label>Lyrics & Akkorde</label>
           <LyricsChordEditor lines={lines} onChange={setLines} disabled={isSubmitting} />

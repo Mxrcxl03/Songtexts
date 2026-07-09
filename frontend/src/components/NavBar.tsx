@@ -58,7 +58,7 @@ function Navbar() {
       <div className="navbar-left">
         <Link to="/" className="navbar-logo">
           <img
-            src="/songtexts-icon.svg?v=2"
+            src="/songtexts-icon.svg?v=4"
             alt="Campfire Songs Icon"
             className="navbar-logo-icon"
           />
@@ -67,15 +67,18 @@ function Navbar() {
             <span className="navbar-logo-songs">Songs</span>
           </span>
         </Link>
-        <Link to="/profile" className="navbar-link">
-          Profile
+        <Link to="/" className="navbar-link">
+          Songs
         </Link>
         <Link to="/song-lists" className="navbar-link">
           Song-Listen
         </Link>
+        <Link to="/profile" className="navbar-link">
+          Profile
+        </Link>
         {isAdmin && (
           <Link to="/admin" className="navbar-link">
-            Admin Panel
+            Admin-Panel
           </Link>
         )}
       </div>

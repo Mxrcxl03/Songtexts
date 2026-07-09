@@ -18,9 +18,12 @@ type LyricsChordEditorProps = {
 const SONG_PART_OPTIONS = [
   'Intro',
   'Strophe',
+  'Strophe End',
   'Pre-Refrain',
   'Refrain',
   'Refrain End',
+  'Backgroundgesang',
+  'Backgroundgesang End',
   'Bridge',
   'Instrumental',
   'Outro',

@@ -36,20 +36,20 @@ public class SongListService {
     private static final List<GeneratedSongListDefinition> GENERATED_LIST_DEFINITIONS = List.of(
             new GeneratedSongListDefinition(
                     GENERATED_LIST_70S_ID,
-                    "Alle Songs der 70er",
+                    "70er",
                     song -> isWithinYearRange(song, 1970, 1979)),
             new GeneratedSongListDefinition(
                     GENERATED_LIST_80S_ID,
-                    "Alle Songs der 80er",
+                    "80er",
                     song -> isWithinYearRange(song, 1980, 1989)),
             new GeneratedSongListDefinition(
                     GENERATED_LIST_POP_ID,
-                    "Alle Pop Songs",
-                    song -> hasGenre(song, "Pop")),
+                    "Pop/ Rock english",
+                    song -> hasGenre(song, "Pop/ Rock english")),
             new GeneratedSongListDefinition(
                     GENERATED_LIST_ROCK_ID,
-                    "Alle Rock Songs",
-                    song -> hasGenre(song, "Rock")));
+                    "Pop/ Rock deutsch",
+                    song -> hasGenre(song, "Pop/ Rock deutsch")));
 
     private final SongListRepository songListRepository;
     private final SongRepository songRepository;

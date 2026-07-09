@@ -8,6 +8,16 @@
   padding: 10px 20px;
 }
 
+body.song-fullscreen-active .navbar {
+  display: none;
+}
+
+.app-layout.has-sticky-navbar .navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
 .navbar-left {
   display: flex;
   align-items: center;

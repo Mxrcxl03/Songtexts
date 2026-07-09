@@ -1,12 +1,19 @@
-import { useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import axios from 'axios';
 import SongService from '../services/song.service';
+import SongListService from '../services/songList.service';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { LyricsChordEditor } from '../components/LyricsChordEditor';
-import { GENRE_OPTIONS, MAX_GENRES_PER_SONG } from '../constants/genres';
-import { LANGUAGE_OPTIONS } from '../constants/scales';
-import type { SongCreate, SongLine } from '../types/song';
+import { GENRE_GROUPS, GENRE_OPTIONS, MAX_GENRES_PER_SONG } from '../constants/genres';
+import { MODE_OPTIONS } from '../constants/modes';
+import type { Song, SongCreate, SongLine } from '../types/song';
+import type { SongList } from '../types/songList';
+import {
+  getManualSongLists,
+  syncSongListAssignments,
+  toggleSongListSelection,
+} from '../utils/songListAssignments';
 import '../styles/global.css';
 
 const KEY_ROOT_OPTIONS = [
@@ -50,11 +57,19 @@ const DOCX_IMPORT_EXPORT_RULES_TOOLTIP =
   'Import/Export-Regeln:\n'
   + '- Meta-Tags: Tagname: Wert (z. B. Titel: Neue Importprobe)\n'
   + '- Akkorde im Text: <Am>, <F#m>, <G>\n'
-  + '- Songparts als eigene Zeile: [Verse], [Refrain], [Bridge]';
+  + '- Songparts als eigene Zeile: [Strophe], [Strophe End], [Refrain], [Bridge]';
 
 const toNullableNumber = (value: string): number | null => {
   const parsed = value.trim() ? Number.parseInt(value, 10) : null;
   return Number.isNaN(parsed) ? null : parsed;
+};
+
+const toOptionalPositiveNumber = (value: string): number | null | undefined => {
+  const trimmed = value.trim();
+  if (trimmed === '') return null;
+  if (!/^\d+$/.test(trimmed)) return undefined;
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isNaN(parsed) || parsed < 1 || parsed > 9999 ? undefined : parsed;
 };
 
 const parseCapoInput = (value: string): number | null | undefined => {
@@ -66,13 +81,10 @@ const parseCapoInput = (value: string): number | null | undefined => {
   return Number.isNaN(parsed) ? undefined : parsed;
 };
 
-const normalizeLanguageOption = (value: string | null | undefined): string => {
+const normalizeModeOption = (value: string | null | undefined): string => {
   const trimmed = (value ?? '').trim();
-  const normalized = trimmed.toLowerCase();
-  if (normalized === 'english' || normalized === 'englisch') return 'English';
-  if (normalized === 'deutsch' || normalized === 'german') return 'Deutsch';
-  if (normalized === 'espanol' || normalized === 'spanish' || normalized === 'spanisch') return 'Espanol';
-  return LANGUAGE_OPTIONS.includes(trimmed as (typeof LANGUAGE_OPTIONS)[number]) ? trimmed : '';
+  const match = MODE_OPTIONS.find((option) => option.toLowerCase() === trimmed.toLowerCase());
+  return match ?? '';
 };
 
 export const AddSongPage = () => {
@@ -91,8 +103,13 @@ export const AddSongPage = () => {
   const [play, setPlay] = useState('');
   const [capo, setCapo] = useState('');
   const [language, setLanguage] = useState('');
+  const [mode, setMode] = useState('');
   const [cadence, setCadence] = useState('');
   const [genres, setGenres] = useState<string[]>([]);
+  const [runningNumber, setRunningNumber] = useState('');
+  const [existingSongs, setExistingSongs] = useState<Song[]>([]);
+  const [songLists, setSongLists] = useState<SongList[]>([]);
+  const [selectedSongListIds, setSelectedSongListIds] = useState<number[]>([]);
   const [lines, setLines] = useState<SongLine[]>([
     { orderIndex: 0, text: '', chordAnnotations: [] },
   ]);
@@ -100,6 +117,27 @@ export const AddSongPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const docxInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    Promise.all([SongService.getSongContent(), SongListService.getAllSongLists()])
+      .then(([songsResponse, songListsResponse]) => {
+        setExistingSongs(songsResponse.data as Song[]);
+        setSongLists(songListsResponse.data as SongList[]);
+      })
+      .catch((err) => console.error('Formulardaten konnten nicht geladen werden:', err));
+  }, []);
+
+  const manualSongLists = useMemo(() => getManualSongLists(songLists), [songLists]);
+
+  const parsedRunningNumber = useMemo(
+    () => toOptionalPositiveNumber(runningNumber),
+    [runningNumber]
+  );
+
+  const runningNumberConflict = useMemo(() => {
+    if (parsedRunningNumber == null) return null;
+    return existingSongs.find((song) => song.runningNumber === parsedRunningNumber) ?? null;
+  }, [existingSongs, parsedRunningNumber]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,8 +154,17 @@ export const AddSongPage = () => {
         alert("Capo muss eine Zahl oder '-' sein.");
         return;
       }
+      if (parsedRunningNumber === undefined) {
+        alert('Songnummer muss eine Zahl zwischen 1 und 9999 sein.');
+        return;
+      }
+      if (runningNumberConflict) {
+        alert(`Songnummer ${parsedRunningNumber} ist bereits vergeben.`);
+        return;
+      }
 
-      await SongService.createSong({
+      const createdSongResponse = await SongService.createSong({
+        runningNumber: parsedRunningNumber,
         artist,
         interpretVersion: interpretVersion.trim() || null,
         composer: composer.trim() || null,
@@ -132,10 +179,13 @@ export const AddSongPage = () => {
         play: play.trim() || null,
         capo: parsedCapo,
         language: language.trim() || null,
+        mode: mode.trim() || null,
         cadence: cadence.trim() || null,
         genres,
         lines,
       });
+      const createdSong = createdSongResponse.data as Song;
+      await syncSongListAssignments(manualSongLists, selectedSongListIds, createdSong.id);
 
       navigate('/');
     } catch (err) {
@@ -178,6 +228,10 @@ export const AddSongPage = () => {
     });
   };
 
+  const toggleSongList = (songListId: number) => {
+    setSelectedSongListIds((current) => toggleSongListSelection(current, songListId));
+  };
+
   const applyImportedSongToForm = (imported: SongCreate) => {
     setArtist(imported.artist ?? '');
     setInterpretVersion(imported.interpretVersion ?? '');
@@ -192,9 +246,11 @@ export const AddSongPage = () => {
     setKeySuffix(imported.keySuffix ?? '');
     setPlay(imported.play ?? '');
     setCapo(imported.capo == null ? '' : imported.capo === -1 ? '-' : String(imported.capo));
-    setLanguage(normalizeLanguageOption(imported.language));
+    setLanguage(imported.language ?? '');
+    setMode(normalizeModeOption(imported.mode));
     setCadence(imported.cadence ?? '');
     setGenres(imported.genres ?? []);
+    setRunningNumber(imported.runningNumber == null ? '' : String(imported.runningNumber));
     setLines(
       imported.lines?.length
         ? imported.lines.map((line, index) => ({
@@ -241,27 +297,55 @@ export const AddSongPage = () => {
   return (
     <div className="page page-form">
       <h2>Neuen Song hinzufuegen</h2>
-      <div className="form-field">
-        <label>Schnellimport (.docx)</label>
-        <input
-          ref={docxInputRef}
-          type="file"
-          accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          onChange={handleDocxImport}
-          hidden
-        />
-        <button
-          type="button"
-          onClick={() => docxInputRef.current?.click()}
-          disabled={isLoading}
-          className="primary-button btn-neutral"
-          title={DOCX_IMPORT_EXPORT_RULES_TOOLTIP}
-        >
-          DOCX auswaehlen und Felder automatisch fuellen
-        </button>
-      </div>
+      <section className="song-input-method-card">
+        <h3>Schnellimport</h3>
+        <div className="form-field">
+          <label>DOCX-Datei</label>
+          <input
+            ref={docxInputRef}
+            type="file"
+            accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            onChange={handleDocxImport}
+            hidden
+          />
+          <button
+            type="button"
+            onClick={() => docxInputRef.current?.click()}
+            disabled={isLoading}
+            className="primary-button docx-import-button"
+            title={DOCX_IMPORT_EXPORT_RULES_TOOLTIP}
+          >
+            DOCX auswaehlen und Felder automatisch fuellen
+          </button>
+        </div>
+      </section>
 
-      <form onSubmit={handleSubmit} className="stack-form">
+      <form onSubmit={handleSubmit} className="stack-form song-input-method-card">
+        <h3>Manuelle Eingabe</h3>
+        <div className="form-field">
+          <label htmlFor="running-number-file">Songnummer:</label>
+          <input
+            id="running-number-file"
+            type="number"
+            min={1}
+            max={9999}
+            value={runningNumber}
+            onChange={(e) => setRunningNumber(e.target.value)}
+            placeholder="Leer lassen fuer automatisch"
+            className={`text-input ${parsedRunningNumber === undefined || runningNumberConflict ? 'input-error' : ''}`}
+          />
+          {parsedRunningNumber === undefined && (
+            <p className="field-hint field-hint-error">Bitte eine Zahl zwischen 1 und 9999 eintragen.</p>
+          )}
+          {runningNumberConflict && (
+            <p className="field-hint field-hint-error">
+              Diese Nummer ist bereits vergeben: {runningNumberConflict.name}
+            </p>
+          )}
+          {!runningNumber.trim() && (
+            <p className="field-hint">Ohne Angabe wird automatisch die naechste freie Nummer vergeben.</p>
+          )}
+        </div>
         <div className="form-field">
           <label htmlFor="artist-file">
             Interpret (Original): <span className="required-asterisk">*</span>
@@ -414,16 +498,26 @@ export const AddSongPage = () => {
         </div>
         <div className="form-field">
           <label htmlFor="language-file">Sprache:</label>
-          <select
+          <input
             id="language-file"
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
+            placeholder="z. B. Deutsch, Englisch, Spanisch"
+            className="text-input"
+          />
+        </div>
+        <div className="form-field">
+          <label htmlFor="mode-file">Modus:</label>
+          <select
+            id="mode-file"
+            value={mode}
+            onChange={(e) => setMode(e.target.value)}
             className="text-input"
           >
             <option value="">Keine Angabe</option>
-            {LANGUAGE_OPTIONS.map((languageOption) => (
-              <option key={languageOption} value={languageOption}>
-                {languageOption}
+            {MODE_OPTIONS.map((modeOption) => (
+              <option key={modeOption} value={modeOption}>
+                {modeOption}
               </option>
             ))}
           </select>
@@ -444,18 +538,45 @@ export const AddSongPage = () => {
             {GENRE_OPTIONS.length} Genres insgesamt)
           </label>
           <div className="genre-checkbox-grid">
-            {GENRE_OPTIONS.map((genre) => (
-              <label key={genre} className="genre-checkbox-item">
-                <input
-                  type="checkbox"
-                  checked={genres.includes(genre)}
-                  onChange={() => toggleGenre(genre)}
-                  disabled={!genres.includes(genre) && genres.length >= MAX_GENRES_PER_SONG}
-                />
-                <span>{genre}</span>
-              </label>
+            {GENRE_GROUPS.map((group) => (
+              <section key={group.label} className="genre-checkbox-group">
+                <h4>{group.label}</h4>
+                <div className="genre-checkbox-group-options">
+                  {group.options.map((genre) => (
+                    <label key={genre} className="genre-checkbox-item">
+                      <input
+                        type="checkbox"
+                        checked={genres.includes(genre)}
+                        onChange={() => toggleGenre(genre)}
+                        disabled={!genres.includes(genre) && genres.length >= MAX_GENRES_PER_SONG}
+                      />
+                      <span>{genre}</span>
+                    </label>
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
+        </div>
+
+        <div className="form-field">
+          <label>Songlisten:</label>
+          {manualSongLists.length > 0 ? (
+            <div className="song-list-checkbox-grid">
+              {manualSongLists.map((songList) => (
+                <label key={songList.id} className="song-list-checkbox-item">
+                  <input
+                    type="checkbox"
+                    checked={selectedSongListIds.includes(songList.id)}
+                    onChange={() => toggleSongList(songList.id)}
+                  />
+                  <span>{songList.name}</span>
+                </label>
+              ))}
+            </div>
+          ) : (
+            <p className="field-hint">Keine manuellen Songlisten vorhanden.</p>
+          )}
         </div>
 
         <div className="form-field">

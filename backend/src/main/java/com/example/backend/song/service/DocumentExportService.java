@@ -2,9 +2,11 @@ package com.example.backend.song.service;
 
 import com.example.backend.song.domain.Song;
 import com.example.backend.song.domain.SongLine;
+import com.example.backend.song.domain.SongModes;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFRun;
+import org.apache.poi.xwpf.usermodel.UnderlinePatterns;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
@@ -14,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -126,6 +129,42 @@ public class DocumentExportService {
                     min-width: max-content;
                 }
 
+                .song-lyric-line.is-after-strophe-end {
+                    margin-top: 0.85rem;
+                }
+
+                .song-lyric-line.is-underlined-heading {
+                    text-decoration: underline;
+                    text-underline-offset: 0.14em;
+                    text-decoration-thickness: 0.08em;
+                }
+
+                .song-lyric-line.is-songpart-line {
+                    color: #0050a4;
+                }
+
+                .song-lyric-line.is-instrumental-songpart {
+                    color: #d4624a;
+                }
+
+                .song-lyric-line.is-refrain-content {
+                    font-weight: 700;
+                }
+
+                .song-lyric-line.is-background-content {
+                    color: #6b7280;
+                    text-decoration: underline;
+                    text-underline-offset: 0.14em;
+                    text-decoration-thickness: 0.08em;
+                }
+
+                .song-lyrics-title {
+                    font-size: 1.12em;
+                    font-weight: 700;
+                    margin: 0 0 0.85rem;
+                    white-space: pre;
+                }
+
                 .song-chord-line {
                     color: #d00000;
                     font-weight: 700;
@@ -206,6 +245,18 @@ public class DocumentExportService {
                 }
             </style>
             """;
+    private static final String STROPHE_LABEL = "strophe";
+    private static final String STROPHE_END_LABEL = "strophe end";
+    private static final String REFRAIN_END_LABEL = "refrain end";
+    private static final String INTRO_LABEL = "intro";
+    private static final String OUTRO_LABEL = "outro";
+    private static final String BACKGROUNDGESANG_LABEL = "backgroundgesang";
+    private static final String BACKGROUNDGESANG_END_LABEL = "backgroundgesang end";
+    private static final String INSTRUMENTAL_LABEL = "instrumental";
+    private static final String SONG_PART_COLOR = "0050A4";
+    private static final String INSTRUMENTAL_COLOR = "D4624A";
+    private static final String BACKGROUND_CONTENT_COLOR = "6B7280";
+    private static final Pattern REFRAIN_WITH_REPEAT_PATTERN = Pattern.compile("^refrain\\s*:\\s*\\d+\\s*x$");
 
     /**
      * Export song to Word (.docx) format
@@ -265,6 +316,12 @@ public class DocumentExportService {
                 playParagraph.createRun().setText("Play: " + song.getPlay());
             }
 
+            String mode = modeValue(song);
+            if (mode != null && !mode.isBlank()) {
+                XWPFParagraph modeParagraph = document.createParagraph();
+                modeParagraph.createRun().setText("Modus: " + mode);
+            }
+
             if (song.getLanguage() != null && !song.getLanguage().isBlank()) {
                 XWPFParagraph languageParagraph = document.createParagraph();
                 languageParagraph.createRun().setText("Sprache: " + song.getLanguage());
@@ -276,10 +333,33 @@ public class DocumentExportService {
             // Empty line
             document.createParagraph();
 
+            XWPFParagraph lyricsTitleParagraph = document.createParagraph();
+            XWPFRun lyricsTitleRun = lyricsTitleParagraph.createRun();
+            lyricsTitleRun.setText(valueOrDash(song.getName()));
+            lyricsTitleRun.setBold(true);
+            lyricsTitleRun.setFontSize(14);
+
             // Song lyrics with positioned chord rows
-            for (SongLine line : song.getLines()) {
+            for (ExportSongLine line : buildExportLines(song.getLines())) {
+                if (line.gapBefore()) {
+                    document.createParagraph();
+                }
                 XWPFParagraph lyricParagraph = document.createParagraph();
-                lyricParagraph.createRun().setText(buildInlineChordLyricLine(line));
+                XWPFRun lyricRun = lyricParagraph.createRun();
+                lyricRun.setText(line.numberPrefix() + buildInlineChordLyricLine(line));
+                if (line.songPartLine()) {
+                    lyricRun.setColor(line.instrumentalSongPart() ? INSTRUMENTAL_COLOR : SONG_PART_COLOR);
+                }
+                if (line.refrainContent()) {
+                    lyricRun.setBold(true);
+                }
+                if (line.backgroundContent()) {
+                    lyricRun.setColor(BACKGROUND_CONTENT_COLOR);
+                    lyricRun.setUnderline(UnderlinePatterns.SINGLE);
+                }
+                if (line.underlinedHeading()) {
+                    lyricRun.setUnderline(UnderlinePatterns.SINGLE);
+                }
             }
 
             document.write(output);
@@ -354,17 +434,25 @@ public class DocumentExportService {
         if (song.getPlay() != null && !song.getPlay().isBlank()) {
             content.append("Play: ").append(song.getPlay()).append("\n");
         }
+        String mode = modeValue(song);
+        if (mode != null && !mode.isBlank()) {
+            content.append("Modus: ").append(mode).append("\n");
+        }
         if (song.getLanguage() != null && !song.getLanguage().isBlank()) {
             content.append("Sprache: ").append(song.getLanguage()).append("\n");
         }
         content.append("Album: ").append(song.getAlbum()).append("\n\n");
+        content.append(valueOrDash(song.getName())).append("\n\n");
 
-        for (SongLine line : song.getLines()) {
-            String chordLine = buildChordLine(line);
-            if (!chordLine.isBlank()) {
-                content.append(chordLine).append("\n");
+        for (ExportSongLine line : buildExportLines(song.getLines())) {
+            if (line.gapBefore()) {
+                content.append("\n");
             }
-            content.append(line.getText()).append("\n");
+            String chordLine = buildChordLine(line.songLine());
+            if (!chordLine.isBlank()) {
+                content.append(line.chordPrefix()).append(chordLine).append("\n");
+            }
+            content.append(line.numberPrefix()).append(line.text()).append("\n");
         }
 
         return content.toString().getBytes();
@@ -441,18 +529,37 @@ public class DocumentExportService {
         html.append(buildMetaTable(song, "    "));
         html.append("  </div>\n");
         html.append("  <div class=\"song-lyrics\">\n");
+        html.append("    <p class=\"song-lyrics-title\">").append(escapeHtml(song.getName())).append("</p>\n");
 
         // Song lyrics with positioned chord rows
-        for (SongLine line : song.getLines()) {
-            String chordLine = escapeHtml(buildChordLine(line));
-            String lineText = escapeHtml(line.getText());
+        for (ExportSongLine line : buildExportLines(song.getLines())) {
+            String chordLine = escapeHtml(line.chordPrefix() + buildChordLine(line.songLine()));
+            String lineText = escapeHtml(line.numberPrefix() + line.text());
+            String paragraphClass = line.gapBefore()
+                    ? "song-lyric-line is-after-strophe-end"
+                    : "song-lyric-line";
+            if (line.underlinedHeading()) {
+                paragraphClass += " is-underlined-heading";
+            }
+            if (line.songPartLine()) {
+                paragraphClass += " is-songpart-line";
+            }
+            if (line.instrumentalSongPart()) {
+                paragraphClass += " is-instrumental-songpart";
+            }
+            if (line.refrainContent()) {
+                paragraphClass += " is-refrain-content";
+            }
+            if (line.backgroundContent()) {
+                paragraphClass += " is-background-content";
+            }
             if (!chordLine.isBlank()) {
-                html.append("    <p class=\"song-lyric-line song-chord-line\">").append(chordLine).append("</p>\n");
+                html.append("    <p class=\"").append(paragraphClass).append(" song-chord-line\">").append(chordLine).append("</p>\n");
             }
             if (lineText.isEmpty()) {
                 lineText = "&nbsp;";
             }
-            html.append("    <p class=\"song-lyric-line\">").append(lineText).append("</p>\n");
+            html.append("    <p class=\"").append(chordLine.isBlank() ? paragraphClass : "song-lyric-line").append("\">").append(lineText).append("</p>\n");
         }
 
         html.append("  </div>\n");
@@ -461,6 +568,123 @@ public class DocumentExportService {
         html.append("</html>\n");
 
         return html.toString();
+    }
+
+    private List<ExportSongLine> buildExportLines(List<SongLine> lines) {
+        if (lines == null || lines.isEmpty()) {
+            return List.of();
+        }
+
+        List<ExportSongLine> exportLines = new ArrayList<>();
+        boolean inStropheBlock = false;
+        int nextStropheNumber = 1;
+        Integer currentStropheNumber = null;
+        boolean stropheNumberConsumed = false;
+        boolean gapBeforeNextVisibleLine = false;
+        boolean inRefrainBlock = false;
+        boolean inBackgroundBlock = false;
+
+        for (SongLine line : lines) {
+            if (line == null) {
+                continue;
+            }
+            String text = nullToEmpty(line.getText());
+            String songPartLabel = songPartLabel(text);
+
+            if (STROPHE_LABEL.equals(songPartLabel)) {
+                inStropheBlock = true;
+                currentStropheNumber = nextStropheNumber++;
+                stropheNumberConsumed = false;
+                continue;
+            }
+
+            if (STROPHE_END_LABEL.equals(songPartLabel)) {
+                inStropheBlock = false;
+                currentStropheNumber = null;
+                stropheNumberConsumed = false;
+                gapBeforeNextVisibleLine = true;
+                continue;
+            }
+
+            if (REFRAIN_END_LABEL.equals(songPartLabel)) {
+                inRefrainBlock = false;
+                continue;
+            }
+
+            if (BACKGROUNDGESANG_END_LABEL.equals(songPartLabel)) {
+                inBackgroundBlock = false;
+                continue;
+            }
+
+            boolean startsRefrainBlock = isRefrainLabel(songPartLabel);
+            if (startsRefrainBlock) {
+                inRefrainBlock = true;
+            }
+            boolean startsBackgroundBlock = BACKGROUNDGESANG_LABEL.equals(songPartLabel);
+            if (startsBackgroundBlock) {
+                inBackgroundBlock = true;
+            }
+
+            String numberPrefix = "";
+            if (inStropheBlock && !stropheNumberConsumed && currentStropheNumber != null && songPartLabel == null) {
+                numberPrefix = currentStropheNumber + ".   ";
+                stropheNumberConsumed = true;
+            }
+            String displayText = displayedSongPartText(songPartLabel);
+            boolean refrainContent = inRefrainBlock && !startsRefrainBlock && songPartLabel == null;
+            boolean backgroundContent = inBackgroundBlock && !startsBackgroundBlock && songPartLabel == null;
+            exportLines.add(new ExportSongLine(
+                    line,
+                    numberPrefix,
+                    gapBeforeNextVisibleLine,
+                    displayText,
+                    songPartLabel != null,
+                    refrainContent,
+                    backgroundContent,
+                    INSTRUMENTAL_LABEL.equals(songPartLabel)));
+            gapBeforeNextVisibleLine = false;
+        }
+
+        return exportLines;
+    }
+
+    private String songPartLabel(String text) {
+        String value = nullToEmpty(text).trim();
+        if (!value.startsWith("[") || !value.endsWith("]") || value.length() < 3) {
+            return null;
+        }
+        return value.substring(1, value.length() - 1).trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String nullToEmpty(String value) {
+        return value == null ? "" : value;
+    }
+
+    private String displayedSongPartText(String songPartLabel) {
+        if (INTRO_LABEL.equals(songPartLabel)) {
+            return "INTRO:";
+        }
+        if (OUTRO_LABEL.equals(songPartLabel)) {
+            return "OUTRO:";
+        }
+        if (BACKGROUNDGESANG_LABEL.equals(songPartLabel)) {
+            return "BACKGROUNDGESANG:";
+        }
+        if (INSTRUMENTAL_LABEL.equals(songPartLabel)) {
+            return "INSTRUMENTAL:";
+        }
+        if ("refrain".equals(songPartLabel)) {
+            return "REFRAIN:";
+        }
+        if (isRefrainLabel(songPartLabel)) {
+            return "REFRAIN: " + songPartLabel.substring(songPartLabel.indexOf(':') + 1).trim();
+        }
+        return null;
+    }
+
+    private boolean isRefrainLabel(String songPartLabel) {
+        return "refrain".equals(songPartLabel)
+                || (songPartLabel != null && REFRAIN_WITH_REPEAT_PATTERN.matcher(songPartLabel).matches());
     }
 
     private String buildChordLine(SongLine line) {
@@ -490,11 +714,15 @@ public class DocumentExportService {
         return out.toString();
     }
 
-    private String buildInlineChordLyricLine(SongLine line) {
-        if (line == null) {
+    private String buildInlineChordLyricLine(ExportSongLine exportLine) {
+        if (exportLine == null || exportLine.songLine() == null) {
             return "";
         }
 
+        SongLine line = exportLine.songLine();
+        if (exportLine.displayText() != null) {
+            return exportLine.displayText();
+        }
         String text = line.getText() == null ? "" : line.getText();
         if (line.getChordAnnotations() == null || line.getChordAnnotations().isEmpty()) {
             return text;
@@ -598,7 +826,7 @@ public class DocumentExportService {
         appendMetaField(meta, indent + "      ", "Nr.", valueOrDash(song.getRunningNumber()));
         appendMetaField(meta, indent + "      ", "Titel", valueOrDash(song.getName()));
         appendMetaField(meta, indent + "      ", "Jahr", valueOrDash(song.getSongYear()));
-        appendMetaField(meta, indent + "      ", "Sprache", valueOrDash(song.getLanguage()));
+        appendMetaField(meta, indent + "      ", "Modus", valueOrDash(modeValue(song)));
         appendMetaField(meta, indent + "      ", "Album", valueOrDash(song.getAlbum()));
         meta.append(indent).append("    </td>\n");
 
@@ -653,6 +881,25 @@ public class DocumentExportService {
         }
 
         return keyRoot + " (" + keySuffix + ")";
+    }
+
+    private String modeValue(Song song) {
+        if (song == null) {
+            return null;
+        }
+        if (song.getMode() != null && !song.getMode().isBlank()) {
+            return song.getMode();
+        }
+        if (song.getLanguage() == null || song.getLanguage().isBlank()) {
+            return null;
+        }
+        String normalized = song.getLanguage().trim().toLowerCase(Locale.ROOT);
+        for (String allowed : SongModes.ALLOWED) {
+            if (allowed.toLowerCase(Locale.ROOT).equals(normalized)) {
+                return allowed;
+            }
+        }
+        return null;
     }
 
     private String ensureViewportMeta(String html) {
@@ -779,5 +1026,30 @@ public class DocumentExportService {
                 .trim()
                 .replace(' ', '_');
         return normalized.isBlank() ? "song" : normalized;
+    }
+
+    private record ExportSongLine(
+            SongLine songLine,
+            String numberPrefix,
+            boolean gapBefore,
+            String displayText,
+            boolean songPartLine,
+            boolean refrainContent,
+            boolean backgroundContent,
+            boolean instrumentalSongPart) {
+        private String text() {
+            if (displayText != null) {
+                return displayText;
+            }
+            return songLine.getText() == null ? "" : songLine.getText();
+        }
+
+        private boolean underlinedHeading() {
+            return displayText != null;
+        }
+
+        private String chordPrefix() {
+            return " ".repeat(numberPrefix.length());
+        }
     }
 }

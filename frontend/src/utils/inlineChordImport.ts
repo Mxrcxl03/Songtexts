@@ -7,9 +7,12 @@ const SONG_PART_LINE_PATTERN = /^\s*\[([^\]]+)\]\s*$/;
 const KNOWN_SONG_PARTS = new Set([
   'intro',
   'strophe',
+  'strophe end',
   'pre-refrain',
   'refrain',
   'refrain end',
+  'backgroundgesang',
+  'backgroundgesang end',
   'bridge',
   'instrumental',
   'outro',

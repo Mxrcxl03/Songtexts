@@ -63,8 +63,10 @@ class SongServiceTypographyTest {
                 null,
                 null,
                 null,
+                null,
                 List.of(),
-                List.of(new SongLineDTO(null, 1, lineText, List.of())));
+                List.of(new SongLineDTO(null, 1, lineText, List.of())),
+                null);
 
         SongResponse response = songService.createSong(request);
 
@@ -89,6 +91,7 @@ class SongServiceTypographyTest {
         existingLine.setSong(existing);
         existing.setLines(List.of(existingLine));
 
+        when(songRepository.findAll()).thenReturn(List.of(existing));
         when(songRepository.findById(anyLong())).thenReturn(Optional.of(existing));
         when(songRepository.save(any(Song.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -112,8 +115,10 @@ class SongServiceTypographyTest {
                 null,
                 null,
                 null,
+                null,
                 List.of(),
-                List.of(new SongLineDTO(99L, 1, updatedLine, null)));
+                List.of(new SongLineDTO(99L, 1, updatedLine, null)),
+                null);
 
         SongResponse response = songService.updateSong(42L, updateRequest);
 

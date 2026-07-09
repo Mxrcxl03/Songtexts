@@ -90,21 +90,21 @@ class SongListServiceTest {
     }
 
     @Test
-    void getById_forGeneratedPopListFiltersAndOrdersSongs() {
+    void getById_forGeneratedEnglishPopRockListFiltersAndOrdersSongs() {
         Song popB = new Song("Artist", "Beta", "Album");
         popB.setId(10L);
         popB.setRunningNumber(2L);
-        popB.setGenres(List.of("Pop"));
+        popB.setGenres(List.of("Pop/ Rock english"));
 
         Song popA = new Song("Artist", "Alpha", "Album");
         popA.setId(11L);
         popA.setRunningNumber(1L);
-        popA.setGenres(List.of("Pop"));
+        popA.setGenres(List.of("Pop/ Rock english"));
 
         Song rock = new Song("Artist", "Rocky", "Album");
         rock.setId(12L);
         rock.setRunningNumber(3L);
-        rock.setGenres(List.of("Rock"));
+        rock.setGenres(List.of("Pop/ Rock deutsch"));
 
         when(songRepository.findAll()).thenReturn(List.of(popB, rock, popA));
 
@@ -112,7 +112,7 @@ class SongListServiceTest {
 
         assertEquals(-901L, response.getId());
         assertTrue(response.isGenerated());
-        assertEquals("Alle Pop Songs", response.getName());
+        assertEquals("Pop/ Rock english", response.getName());
         assertEquals(2, response.getSongCount());
         assertEquals(11L, response.getSongs().get(0).getSongId());
         assertEquals(10L, response.getSongs().get(1).getSongId());

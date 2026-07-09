@@ -150,7 +150,11 @@ public class DocumentImportService {
                 request.setCapo(parseCapoValue(value));
                 yield true;
             }
-            case "skala", "language", "sprache" -> {
+            case "modus", "mode" -> {
+                request.setMode(nullIfBlank(value));
+                yield true;
+            }
+            case "language", "sprache" -> {
                 request.setLanguage(nullIfBlank(value));
                 yield true;
             }
@@ -241,7 +245,7 @@ public class DocumentImportService {
         if (value == null || value.trim().isBlank()) {
             return List.of();
         }
-        String[] parts = value.split("[,;/|]");
+        String[] parts = value.split("[,;|]");
         List<String> genres = new ArrayList<>();
         for (String part : parts) {
             String cleaned = part.trim();

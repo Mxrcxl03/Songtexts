@@ -17,6 +17,7 @@ export type Song = {
   bpm?: number | null;
   capo?: number | null;
   language?: string | null;
+  mode?: string | null;
   cadence?: string | null;
   songYear?: number | null;
   timeSignature?: string | null;

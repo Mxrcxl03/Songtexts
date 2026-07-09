@@ -5,27 +5,28 @@ import java.util.List;
 public final class SongGenres {
 
     public static final List<String> ALLOWED = List.of(
-            "Lobpreis",
-            "Worship",
-            "Rock",
-            "Pop",
-            "Ballade",
-            "Folk",
-            "Gospel",
-            "Soul",
-            "Blues",
-            "Country",
-            "Hip-Hop",
-            "Rap",
-            "R&B",
-            "Funk",
-            "Reggae",
-            "Jazz",
-            "Swing",
+            "Oldies",
+            "70er",
+            "80er",
+            "90er",
+            "2000er",
+            "2010er",
+            "2020er",
+            "Deutsch",
+            "Deutsch 2000+",
+            "Pop/ Rock deutsch",
+            "NDW",
+            "Hip Hop deutsch",
             "Schlager",
-            "Alternative",
-            "Indie",
-            "Electronic");
+            "DDR-Schlager",
+            "Schlaflieder",
+            "Pop/ Rock english",
+            "Country",
+            "Punk",
+            "Christmas",
+            "Synth",
+            "Shanty",
+            "New Wave");
 
     public static final int MAX_GENRES_PER_SONG = 4;
 

@@ -71,8 +71,13 @@ function AppLayout() {
     document.title = nextTitle;
   }, [location.pathname]);
 
+  const isSongDetailPath = /^\/song\/\d+(\/view)?$/.test(location.pathname);
+  const layoutClassName = isSongDetailPath
+    ? 'app-layout'
+    : 'app-layout has-sticky-navbar';
+
   return (
-    <>
+    <div className={layoutClassName}>
       {!hideNavbar && <Navbar />}
 
       <Routes>
@@ -170,7 +175,7 @@ function AppLayout() {
 
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
-    </>
+    </div>
   );
 }
 

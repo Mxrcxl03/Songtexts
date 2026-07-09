@@ -68,6 +68,9 @@ public class Song {
     private String language;
 
     @Column
+    private String mode;
+
+    @Column
     private String cadence;
 
     @ElementCollection
