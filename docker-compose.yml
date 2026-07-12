@@ -88,6 +88,7 @@ services:
     labels:
       - "traefik.http.routers.backend.rule=(Host(`${DOMAIN}`) || Host(`www.${DOMAIN}`)) && PathPrefix(`/api`)"
       - "traefik.enable=true"
+      - "traefik.docker.network=songtexts_default"
       - "traefik.http.routers.backend.entrypoints=websecure"
       - "traefik.http.routers.backend.tls=true"
       - "traefik.http.routers.backend.tls.certresolver=letsencrypt"
