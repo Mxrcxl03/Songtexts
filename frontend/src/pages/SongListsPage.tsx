@@ -109,6 +109,7 @@ const GENERATED_FOLDERS: GeneratedFolderDefinition[] = [
     lists: [
       generatedList(-501, 'Schlaflieder', (song) => hasGenre(song, 'Schlaflieder')),
       generatedList(-502, 'Christmas', (song) => hasGenre(song, 'Christmas')),
+      generatedList(-503, 'Duette', (song) => hasGenre(song, 'Duette')),
     ],
   },
   {
@@ -118,6 +119,8 @@ const GENERATED_FOLDERS: GeneratedFolderDefinition[] = [
       generatedList(-601, 'Synth', (song) => hasGenre(song, 'Synth')),
       generatedList(-602, 'Shanty', (song) => hasGenre(song, 'Shanty')),
       generatedList(-603, 'New Wave', (song) => hasGenre(song, 'New Wave')),
+      generatedList(-604, 'Reggae', (song) => hasGenre(song, 'Reggae')),
+      generatedList(-605, 'Volksmusik/ Folklore', (song) => hasGenre(song, 'Volksmusik/ Folklore')),
     ],
   },
 ];

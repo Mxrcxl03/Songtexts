@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -413,37 +412,26 @@ public class SongService {
             return List.of();
         }
 
-        Map<String, String> allowedByNormalized = SongGenres.ALLOWED.stream()
+        Map<String, String> predefinedByNormalized = SongGenres.ALLOWED.stream()
                 .collect(Collectors.toMap(
                         value -> value.toLowerCase(Locale.ROOT),
                         value -> value,
                         (left, right) -> left,
                         LinkedHashMap::new));
 
-        LinkedHashSet<String> unique = new LinkedHashSet<>();
+        LinkedHashMap<String, String> unique = new LinkedHashMap<>();
         for (String rawGenre : genres) {
             if (rawGenre == null || rawGenre.isBlank()) {
                 continue;
             }
 
-            String normalizedKey = rawGenre.trim().toLowerCase(Locale.ROOT);
-            String canonical = allowedByNormalized.get(normalizedKey);
-            if (canonical == null) {
-                throw new IllegalArgumentException(
-                        "Ungueltiges Genre: '"
-                                + rawGenre
-                                + "'. Erlaubt sind nur diese Genres: "
-                                + String.join(", ", SongGenres.ALLOWED));
-            }
-            unique.add(canonical);
+            String trimmed = rawGenre.trim();
+            String normalizedKey = trimmed.toLowerCase(Locale.ROOT);
+            String canonical = predefinedByNormalized.getOrDefault(normalizedKey, trimmed);
+            unique.putIfAbsent(normalizedKey, canonical);
         }
 
-        if (unique.size() > SongGenres.MAX_GENRES_PER_SONG) {
-            throw new IllegalArgumentException(
-                    "Es sind maximal " + SongGenres.MAX_GENRES_PER_SONG + " Genre-Tags pro Song erlaubt.");
-        }
-
-        return List.copyOf(unique);
+        return List.copyOf(unique.values());
     }
 
     private Long toRunningNumber(Song song) {

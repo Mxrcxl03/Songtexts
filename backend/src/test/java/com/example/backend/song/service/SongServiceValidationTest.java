@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.ArrayList;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,6 +24,7 @@ import com.example.backend.song.api.dto.SongLineDTO;
 import com.example.backend.song.api.dto.SongRequest;
 import com.example.backend.song.api.dto.SongResponse;
 import com.example.backend.song.domain.Song;
+import com.example.backend.song.domain.SongGenres;
 import com.example.backend.song.domain.SongLine;
 import com.example.backend.song.persistence.SongRepository;
 
@@ -96,9 +98,14 @@ class SongServiceValidationTest {
     }
 
     @Test
-    void createSong_rejectsInvalidCapoAndTooManyGenres() {
+    void createSong_rejectsInvalidCapoButAcceptsPredefinedAndCustomGenres() {
         when(songRepository.findAll(Sort.by("id").ascending())).thenReturn(List.of());
         when(songRepository.findAll()).thenReturn(List.of());
+        when(songRepository.save(any(Song.class))).thenAnswer(invocation -> {
+            Song song = invocation.getArgument(0);
+            song.setId(100L);
+            return song;
+        });
 
         SongRequest invalidCapo = new SongRequest(
                 "Artist",
@@ -122,7 +129,19 @@ class SongServiceValidationTest {
                 List.of(),
                 null);
 
-        SongRequest tooManyGenres = new SongRequest(
+        List<String> requestedGenres = new ArrayList<>(SongGenres.ALLOWED);
+        requestedGenres.add("Shoegaze");
+        requestedGenres.add(" neo soul ");
+        requestedGenres.add("shoegaze");
+        requestedGenres.add("reggae");
+        requestedGenres.add("volksmusik/ folklore");
+        requestedGenres.add("duette");
+
+        List<String> expectedGenres = new ArrayList<>(SongGenres.ALLOWED);
+        expectedGenres.add("Shoegaze");
+        expectedGenres.add("neo soul");
+
+        SongRequest manyGenres = new SongRequest(
                 "Artist",
                 "Name",
                 "Album",
@@ -140,12 +159,14 @@ class SongServiceValidationTest {
                 null,
                 null,
                 null,
-                List.of("Oldies", "70er", "80er", "90er", "2000er"),
+                requestedGenres,
                 List.of(),
                 null);
 
         assertThrows(IllegalArgumentException.class, () -> songService.createSong(invalidCapo));
-        assertThrows(IllegalArgumentException.class, () -> songService.createSong(tooManyGenres));
+        SongResponse response = songService.createSong(manyGenres);
+
+        assertIterableEquals(expectedGenres, response.getGenres());
     }
 
     @Test

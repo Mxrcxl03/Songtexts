@@ -107,7 +107,9 @@ class AuthenticationServiceTest {
         ResponseEntity<?> response = authenticationService.register(request);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("Registration request submitted. Waiting for admin approval.", response.getBody());
+        assertEquals(
+                "Registrierung erfolgreich. Dein Konto muss noch von einem Administrator freigeschaltet werden.",
+                response.getBody());
 
         ArgumentCaptor<RegistrationRequest> captor = ArgumentCaptor.forClass(RegistrationRequest.class);
         verify(registrationRequestRepository).save(captor.capture());

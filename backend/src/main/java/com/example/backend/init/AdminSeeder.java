@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Configuration
@@ -15,6 +16,7 @@ public class AdminSeeder implements CommandLineRunner {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final Environment environment;
 
     @Value("${app.admin.username:admin}")
     private String adminUsername;
@@ -31,6 +33,14 @@ public class AdminSeeder implements CommandLineRunner {
             return;
         }
 
+        if (isDevProfile()) {
+            userRepository.findByUsername(adminUsername).ifPresent(admin -> {
+                admin.setPassword(passwordEncoder.encode(adminPassword));
+                admin.setRole(Role.ADMIN);
+                userRepository.save(admin);
+            });
+        }
+
         boolean existsByEmail = userRepository.existsByEmail(adminEmail);
         boolean existsByUsername = userRepository.existsByUsername(adminUsername);
 
@@ -41,5 +51,14 @@ public class AdminSeeder implements CommandLineRunner {
         User admin = new User(adminUsername, adminEmail, passwordEncoder.encode(adminPassword), Role.ADMIN);
 
         userRepository.save(admin);
+    }
+
+    private boolean isDevProfile() {
+        for (String profile : environment.getActiveProfiles()) {
+            if ("dev".equals(profile)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

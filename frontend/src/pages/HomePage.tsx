@@ -1,5 +1,6 @@
 import '../styles/global.css';
 import { useState, useEffect } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import { useNavigate } from 'react-router';
 import axios from 'axios';
 import SongService from '../services/song.service';
@@ -80,6 +81,23 @@ export const HomePage = () => {
     modeFilter.trim() !== '' ||
     genreFilter.trim() !== '' ||
     yearFilter.trim() !== '';
+
+  const applyFilterSelection = (
+    setter: Dispatch<SetStateAction<string>>,
+    value: string
+  ) => {
+    setter(value);
+    setShowFilterPopup(false);
+  };
+
+  const resetFilters = () => {
+    setArtistOriginalFilter('');
+    setInterpretVersionFilter('');
+    setAlbumFilter('');
+    setModeFilter('');
+    setGenreFilter('');
+    setYearFilter('');
+  };
 
   const toPaddedRunningNumber = (runningNumber: number | null | undefined) =>
     runningNumber === null || runningNumber === undefined
@@ -334,169 +352,193 @@ export const HomePage = () => {
         </div>
       </div>
 
-      <div className="search-filter-row">
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Nach Nr, Titel, Interpret Original, Interpret Version oder Album suchen..."
-          className="search-input"
-        />
+      <div className="search-filter-area">
+        <div className="search-filter-row">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Nach Nr, Titel, Interpret Original, Interpret Version oder Album suchen..."
+            className="search-input"
+          />
 
-        <div className="filter-popup-wrapper">
           <button
             type="button"
-            className={`filter-toggle-btn${hasActiveTagFilters ? ' has-active-filters' : ''}`}
-            onClick={() => setShowFilterPopup((prev) => !prev)}
-            aria-label="Filter anzeigen"
-            title="Filter"
+            className="filter-reset-icon-btn"
+            onClick={resetFilters}
+            disabled={!hasActiveTagFilters}
+            aria-label="Alle Filter zurücksetzen"
+            title="Alle Filter zurücksetzen"
           >
-            <svg viewBox="0 0 24 24" className="filter-toggle-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" className="filter-reset-icon" aria-hidden="true">
               <path
                 fill="currentColor"
-                d="M3 5a1 1 0 0 1 1-1h16a1 1 0 0 1 .8 1.6L14 14.5V20a1 1 0 0 1-1.447.894l-3-1.5A1 1 0 0 1 9 18.5v-4L3.2 5.6A1 1 0 0 1 3 5z"
+                d="M18.3 5.71 12 12l6.3 6.29-1.41 1.41L10.59 13.41 4.29 19.7 2.88 18.29 9.17 12 2.88 5.71 4.29 4.3l6.3 6.29 6.3-6.29 1.41 1.41z"
               />
             </svg>
           </button>
 
-          {showFilterPopup && (
-            <div className="filter-popup" aria-label="Tag Filter Popup">
-              <label className="filter-label" htmlFor="artist-original-filter">
-                Interpret Original
-              </label>
-              <select
-                id="artist-original-filter"
-                className="filter-control"
-                value={artistOriginalFilter}
-                onChange={(e) => setArtistOriginalFilter(e.target.value)}
-              >
-                <option value="">Alle</option>
-                {artistOriginalOptions.map((artist) => (
-                  <option key={artist} value={artist}>
-                    {artist}
-                  </option>
-                ))}
-              </select>
+          <div className="filter-popup-wrapper">
+            <button
+              type="button"
+              className={`filter-toggle-btn${hasActiveTagFilters ? ' has-active-filters' : ''}`}
+              onClick={() => setShowFilterPopup((prev) => !prev)}
+              aria-label="Filter anzeigen"
+              title="Filter"
+            >
+              <svg viewBox="0 0 24 24" className="filter-toggle-icon" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M3 5a1 1 0 0 1 1-1h16a1 1 0 0 1 .8 1.6L14 14.5V20a1 1 0 0 1-1.447.894l-3-1.5A1 1 0 0 1 9 18.5v-4L3.2 5.6A1 1 0 0 1 3 5z"
+                />
+              </svg>
+            </button>
 
-              <label
-                className="filter-label"
-                htmlFor="interpret-version-filter"
-              >
-                Interpret Version
-              </label>
-              <select
-                id="interpret-version-filter"
-                className="filter-control"
-                value={interpretVersionFilter}
-                onChange={(e) => setInterpretVersionFilter(e.target.value)}
-              >
-                <option value="">Alle</option>
-                {interpretVersionOptions.map((version) => (
-                  <option key={version} value={version}>
-                    {version}
-                  </option>
-                ))}
-              </select>
+            {showFilterPopup && (
+              <div className="filter-popup" aria-label="Tag Filter Popup">
+                <button
+                  type="button"
+                  className="filter-popup-close-btn"
+                  onClick={() => setShowFilterPopup(false)}
+                  aria-label="Filter schließen"
+                  title="Filter schließen"
+                >
+                  <svg viewBox="0 0 24 24" className="filter-popup-close-icon" aria-hidden="true">
+                    <path
+                      fill="currentColor"
+                      d="M18.3 5.71 12 12l6.3 6.29-1.41 1.41L10.59 13.41 4.29 19.7 2.88 18.29 9.17 12 2.88 5.71 4.29 4.3l6.3 6.29 6.3-6.29 1.41 1.41z"
+                    />
+                  </svg>
+                </button>
+                <label className="filter-label" htmlFor="artist-original-filter">
+                  Interpret Original
+                </label>
+                <select
+                  id="artist-original-filter"
+                  className="filter-control"
+                  value={artistOriginalFilter}
+                  onChange={(e) => applyFilterSelection(setArtistOriginalFilter, e.target.value)}
+                >
+                  <option value="">Alle</option>
+                  {artistOriginalOptions.map((artist) => (
+                    <option key={artist} value={artist}>
+                      {artist}
+                    </option>
+                  ))}
+                </select>
 
-              <label className="filter-label" htmlFor="album-filter">
-                Album
-              </label>
-              <select
-                id="album-filter"
-                className="filter-control"
-                value={albumFilter}
-                onChange={(e) => setAlbumFilter(e.target.value)}
-              >
-                <option value="">Alle</option>
-                {albumOptions.map((album) => (
-                  <option key={album} value={album}>
-                    {album}
-                  </option>
-                ))}
-              </select>
+                <label
+                  className="filter-label"
+                  htmlFor="interpret-version-filter"
+                >
+                  Interpret Version
+                </label>
+                <select
+                  id="interpret-version-filter"
+                  className="filter-control"
+                  value={interpretVersionFilter}
+                  onChange={(e) => applyFilterSelection(setInterpretVersionFilter, e.target.value)}
+                >
+                  <option value="">Alle</option>
+                  {interpretVersionOptions.map((version) => (
+                    <option key={version} value={version}>
+                      {version}
+                    </option>
+                  ))}
+                </select>
 
-              <label className="filter-label" htmlFor="mode-filter">
-                Modus
-              </label>
-              <select
-                id="mode-filter"
-                className="filter-control"
-                value={modeFilter}
-                onChange={(e) => setModeFilter(e.target.value)}
-              >
-                <option value="">Alle</option>
-                {modeOptions.map((mode) => (
-                  <option key={mode} value={mode}>
-                    {mode}
-                  </option>
-                ))}
-              </select>
+                <label className="filter-label" htmlFor="album-filter">
+                  Album
+                </label>
+                <select
+                  id="album-filter"
+                  className="filter-control"
+                  value={albumFilter}
+                  onChange={(e) => applyFilterSelection(setAlbumFilter, e.target.value)}
+                >
+                  <option value="">Alle</option>
+                  {albumOptions.map((album) => (
+                    <option key={album} value={album}>
+                      {album}
+                    </option>
+                  ))}
+                </select>
 
-              <label className="filter-label" htmlFor="year-filter">
-                Jahr
-              </label>
-              <select
-                id="year-filter"
-                className="filter-control"
-                value={yearFilter}
-                onChange={(e) => setYearFilter(e.target.value)}
-              >
-                <option value="">Alle</option>
-                {yearOptions.map((year) => (
-                  <option key={year} value={String(year)}>
-                    {year}
-                  </option>
-                ))}
-              </select>
+                <label className="filter-label" htmlFor="mode-filter">
+                  Modus
+                </label>
+                <select
+                  id="mode-filter"
+                  className="filter-control"
+                  value={modeFilter}
+                  onChange={(e) => applyFilterSelection(setModeFilter, e.target.value)}
+                >
+                  <option value="">Alle</option>
+                  {modeOptions.map((mode) => (
+                    <option key={mode} value={mode}>
+                      {mode}
+                    </option>
+                  ))}
+                </select>
 
-              <label className="filter-label" htmlFor="genre-filter">
-                Genre
-              </label>
-              <select
-                id="genre-filter"
-                className="filter-control"
-                value={genreFilter}
-                onChange={(e) => setGenreFilter(e.target.value)}
-              >
-                <option value="">Alle</option>
-                {groupedGenreOptions.map((group) => (
-                  <optgroup key={group.label} label={group.label}>
-                    {group.options.map((genre) => (
+                <label className="filter-label" htmlFor="year-filter">
+                  Jahr
+                </label>
+                <select
+                  id="year-filter"
+                  className="filter-control"
+                  value={yearFilter}
+                  onChange={(e) => applyFilterSelection(setYearFilter, e.target.value)}
+                >
+                  <option value="">Alle</option>
+                  {yearOptions.map((year) => (
+                    <option key={year} value={String(year)}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+
+                <label className="filter-label" htmlFor="genre-filter">
+                  Genre
+                </label>
+                <select
+                  id="genre-filter"
+                  className="filter-control"
+                  value={genreFilter}
+                  onChange={(e) => applyFilterSelection(setGenreFilter, e.target.value)}
+                >
+                  <option value="">Alle</option>
+                  {groupedGenreOptions.map((group) => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.options.map((genre) => (
+                        <option key={genre} value={genre}>
+                          {genre}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                  {ungroupedGenreOptions.length > 0 && (
+                    <optgroup label="Weitere">
+                      {ungroupedGenreOptions.map((genre) => (
                       <option key={genre} value={genre}>
                         {genre}
                       </option>
-                    ))}
-                  </optgroup>
-                ))}
-                {ungroupedGenreOptions.length > 0 && (
-                  <optgroup label="Weitere">
-                    {ungroupedGenreOptions.map((genre) => (
-                      <option key={genre} value={genre}>
-                        {genre}
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
-
-              <button
-                type="button"
-                className="filter-reset-btn"
-                onClick={() => {
-                  setArtistOriginalFilter('');
-                  setInterpretVersionFilter('');
-                  setAlbumFilter('');
-                  setModeFilter('');
-                  setGenreFilter('');
-                  setYearFilter('');
-                }}
-                disabled={!hasActiveTagFilters}
-              >
-                Filter zurücksetzen
-              </button>
-            </div>
-          )}
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+              </div>
+            )}
+          </div>
         </div>
+        <button
+          type="button"
+          className="filter-reset-btn filter-reset-mobile-btn"
+          onClick={resetFilters}
+          disabled={!hasActiveTagFilters}
+        >
+          Alle Filter zurücksetzen
+        </button>
       </div>
 
       {filtered.length === 0 ? (

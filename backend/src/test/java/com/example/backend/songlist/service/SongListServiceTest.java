@@ -7,9 +7,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.data.domain.Sort;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -118,5 +121,50 @@ class SongListServiceTest {
         assertEquals(10L, response.getSongs().get(1).getSongId());
         assertEquals(1, response.getSongs().get(0).getOrderIndex());
         assertEquals(2, response.getSongs().get(1).getOrderIndex());
+    }
+
+    @Test
+    void getAll_includesGeneratedListsForNewStandardGenresWithUniqueIds() {
+        Song duet = new Song("Artist", "Duet Song", "Album");
+        duet.setId(20L);
+        duet.setRunningNumber(20L);
+        duet.setGenres(List.of("Duette"));
+
+        Song reggae = new Song("Artist", "Reggae Song", "Album");
+        reggae.setId(21L);
+        reggae.setRunningNumber(21L);
+        reggae.setGenres(List.of("Reggae"));
+
+        Song folklore = new Song("Artist", "Folklore Song", "Album");
+        folklore.setId(22L);
+        folklore.setRunningNumber(22L);
+        folklore.setGenres(List.of("Volksmusik/ Folklore"));
+
+        when(songRepository.findAll()).thenReturn(List.of(duet, reggae, folklore));
+        when(songListRepository.findAll(Sort.by("name").ascending())).thenReturn(List.of());
+
+        List<SongListResponse> responses = songListService.getAll();
+        Set<Long> ids = responses.stream().map(SongListResponse::getId).collect(Collectors.toSet());
+
+        assertEquals(responses.size(), ids.size());
+        assertGeneratedListContainsSong(responses, -903L, "Duette", 20L);
+        assertGeneratedListContainsSong(responses, -904L, "Reggae", 21L);
+        assertGeneratedListContainsSong(responses, -905L, "Volksmusik/ Folklore", 22L);
+    }
+
+    private static void assertGeneratedListContainsSong(
+            List<SongListResponse> responses,
+            Long id,
+            String name,
+            Long songId) {
+        SongListResponse response = responses.stream()
+                .filter(list -> id.equals(list.getId()))
+                .findFirst()
+                .orElseThrow();
+
+        assertTrue(response.isGenerated());
+        assertEquals(name, response.getName());
+        assertEquals(1, response.getSongCount());
+        assertEquals(songId, response.getSongs().get(0).getSongId());
     }
 }

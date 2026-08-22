@@ -2,6 +2,7 @@ import { useState } from 'react';
 import AuthService from '../services/auth.service';
 import { useNavigate } from 'react-router';
 import axios from 'axios';
+import { PasswordInput } from '../components/PasswordInput';
 import '../styles/global.css';
 
 export const LoginPage = () => {
@@ -39,12 +40,10 @@ export const LoginPage = () => {
           value={username}
           onChange={(e) => setUsername(e.target.value)}
         />
-        <input
-          className="text-input"
-          placeholder="Password"
-          type="password"
+        <PasswordInput
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={setPassword}
+          autoComplete="current-password"
         />
         <button type="submit" className="primary-button btn-edit">
           Anmelden

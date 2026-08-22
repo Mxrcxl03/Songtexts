@@ -10,15 +10,8 @@ import UserService from '../services/user.service';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { buildChordLine } from '../utils/buildChordLine';
 import { getRefrainUnderlineFlags, getVisibleSongLineEntries } from '../utils/songPart';
+import { toDisplayString, toLanguageDisplayValue, toMetaValue } from '../utils/songDisplay';
 
-const toDisplayString = (value: string | number | null | undefined): string => {
-  if (value === null || value === undefined) return '';
-  return String(value).trim();
-};
-const toMetaValue = (value: string | number | null | undefined): string => {
-  const display = toDisplayString(value);
-  return display;
-};
 const toFileNamePart = (value: string | number | null | undefined): string => {
   const base = toDisplayString(value)
     .normalize('NFKD')
@@ -335,6 +328,7 @@ export function SongDetailPage() {
     song.runningNumber === null || song.runningNumber === undefined
       ? ''
       : String(song.runningNumber).padStart(4, '0');
+  const languageDisplay = toLanguageDisplayValue(song.language);
   const modeDisplay = toDisplayString(song.mode);
   const genresDisplay = (song.genres ?? []).join(', ');
   const allLines = song.lines ?? [];
@@ -408,8 +402,12 @@ export function SongDetailPage() {
             <span className="song-meta-item-value">{toMetaValue(song.composer)}</span>
           </p>
           <p className="song-meta-item">
-            <strong className="song-meta-item-label">Produzent:</strong>
+            <strong className="song-meta-item-label">Produzent(en):</strong>
             <span className="song-meta-item-value">{toMetaValue(song.producer)}</span>
+          </p>
+          <p className="song-meta-item">
+            <strong className="song-meta-item-label">Sprache:</strong>
+            <span className="song-meta-item-value">{toMetaValue(languageDisplay)}</span>
           </p>
           <p className="song-meta-item">
             <strong className="song-meta-item-label">Genre:</strong>
@@ -440,7 +438,6 @@ export function SongDetailPage() {
         </div>
       </div>
 
-      <h3>Text:</h3>
       <div className="lyrics-editor-readonly">
         <div className="textarea-chords lyrics-chord-surface lyrics-chord-surface-readonly">
           <div className="lyrics-readonly-title">{song.name}</div>

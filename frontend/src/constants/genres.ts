@@ -20,8 +20,14 @@ export const GENRE_GROUPS = [
     label: 'International & Sonstiges',
     options: ['Pop/ Rock english', 'Country', 'Punk', 'Christmas', 'Synth', 'Shanty', 'New Wave'],
   },
+  {
+    label: 'Specials',
+    options: ['Duette'],
+  },
+  {
+    label: 'Special Vibes',
+    options: ['Reggae', 'Volksmusik/ Folklore'],
+  },
 ] as const;
 
 export const GENRE_OPTIONS: readonly string[] = GENRE_GROUPS.flatMap((group) => group.options);
-
-export const MAX_GENRES_PER_SONG = 4;

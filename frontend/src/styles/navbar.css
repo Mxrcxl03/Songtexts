@@ -54,7 +54,7 @@ body.song-fullscreen-active .navbar {
 }
 
 .navbar-logo-songs {
-  color: var(--navbar-text);
+  color: #ff8c2a;
   font-size: 0.88rem;
   font-weight: 600;
   letter-spacing: 0.03em;

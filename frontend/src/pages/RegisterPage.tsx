@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
 import AuthService from '../services/auth.service';
 import { useNavigate } from 'react-router';
+import { PasswordInput } from '../components/PasswordInput';
 import '../styles/global.css';
+
+const REGISTRATION_APPROVAL_MESSAGE =
+  'Registrierung erfolgreich. Dein Konto muss noch von einem Administrator freigeschaltet werden.';
 
 export const RegisterPage = () => {
   const navigate = useNavigate();
@@ -76,13 +80,8 @@ export const RegisterPage = () => {
     setEmailError(false);
     setSubmitting(true);
     try {
-      const result = await AuthService.register(username, email, password);
-      setSuccessMessage(
-        typeof result === 'string'
-          ? result
-          : result.message ||
-              'Registrierungsanfrage wurde eingereicht und wartet auf Freigabe.'
-      );
+      await AuthService.register(username, email, password);
+      setSuccessMessage(REGISTRATION_APPROVAL_MESSAGE);
       setUsername('');
       setEmail('');
       setPassword('');
@@ -120,12 +119,10 @@ export const RegisterPage = () => {
             setEmailError(false);
           }}
         />
-        <input
-          className="text-input"
-          placeholder="Password"
-          type="password"
+        <PasswordInput
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={setPassword}
+          autoComplete="new-password"
         />
         <button
           type="submit"

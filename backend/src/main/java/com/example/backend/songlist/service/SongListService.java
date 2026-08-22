@@ -33,6 +33,9 @@ public class SongListService {
     private static final long GENERATED_LIST_80S_ID = -801L;
     private static final long GENERATED_LIST_POP_ID = -901L;
     private static final long GENERATED_LIST_ROCK_ID = -902L;
+    private static final long GENERATED_LIST_DUETTE_ID = -903L;
+    private static final long GENERATED_LIST_REGGAE_ID = -904L;
+    private static final long GENERATED_LIST_VOLKSMUSIK_FOLKLORE_ID = -905L;
     private static final List<GeneratedSongListDefinition> GENERATED_LIST_DEFINITIONS = List.of(
             new GeneratedSongListDefinition(
                     GENERATED_LIST_70S_ID,
@@ -49,7 +52,19 @@ public class SongListService {
             new GeneratedSongListDefinition(
                     GENERATED_LIST_ROCK_ID,
                     "Pop/ Rock deutsch",
-                    song -> hasGenre(song, "Pop/ Rock deutsch")));
+                    song -> hasGenre(song, "Pop/ Rock deutsch")),
+            new GeneratedSongListDefinition(
+                    GENERATED_LIST_DUETTE_ID,
+                    "Duette",
+                    song -> hasGenre(song, "Duette")),
+            new GeneratedSongListDefinition(
+                    GENERATED_LIST_REGGAE_ID,
+                    "Reggae",
+                    song -> hasGenre(song, "Reggae")),
+            new GeneratedSongListDefinition(
+                    GENERATED_LIST_VOLKSMUSIK_FOLKLORE_ID,
+                    "Volksmusik/ Folklore",
+                    song -> hasGenre(song, "Volksmusik/ Folklore")));
 
     private final SongListRepository songListRepository;
     private final SongRepository songRepository;

@@ -26,9 +26,10 @@ public final class SongGenres {
             "Christmas",
             "Synth",
             "Shanty",
-            "New Wave");
-
-    public static final int MAX_GENRES_PER_SONG = 4;
+            "New Wave",
+            "Duette",
+            "Reggae",
+            "Volksmusik/ Folklore");
 
     private SongGenres() {
     }

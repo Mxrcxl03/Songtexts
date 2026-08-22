@@ -28,6 +28,8 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class AuthenticationService {
+    static final String REGISTRATION_APPROVAL_MESSAGE =
+            "Registrierung erfolgreich. Dein Konto muss noch von einem Administrator freigeschaltet werden.";
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -82,7 +84,7 @@ public class AuthenticationService {
 
         registrationRequestRepository.save(request);
 
-        return ResponseEntity.ok("Registration request submitted. Waiting for admin approval.");
+        return ResponseEntity.ok(REGISTRATION_APPROVAL_MESSAGE);
     }
 
     public ResponseEntity<Void> logout(User principal) {

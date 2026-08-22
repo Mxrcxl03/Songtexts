@@ -65,6 +65,34 @@ class DocumentExportServiceAlignmentTest {
     }
 
     @Test
+    void export_displaysProducerAndLanguageLabelsConsistently() throws IOException {
+        Song song = new Song("Artist", "Title", "Album");
+        song.setProducer("Producer");
+        song.setLanguage("englisch");
+        song.setGenres(List.of("Oldies", "Shoegaze", "neo soul", "Ambient Pop", "Country"));
+        song.setLines(List.of(new SongLine("Line", 1)));
+
+        String html = service.renderHtml(song);
+
+        assertTrue(html.contains("<strong>Produzent(en):</strong>"));
+        assertTrue(html.contains("<strong>Sprache:</strong><span class=\"song-meta-value\">English</span>"));
+        assertTrue(html.contains("<strong>Genres:</strong><span class=\"song-meta-value\">Oldies, Shoegaze, neo soul, Ambient Pop, Country</span>"));
+
+        byte[] docx = service.exportToWord(song);
+        try (XWPFDocument document = new XWPFDocument(new ByteArrayInputStream(docx))) {
+            List<String> texts = document.getParagraphs().stream().map(XWPFParagraph::getText).toList();
+            assertTrue(texts.contains("Produzent(en): Producer"));
+            assertTrue(texts.contains("Sprache: English"));
+            assertTrue(texts.contains("Genres: Oldies, Shoegaze, neo soul, Ambient Pop, Country"));
+        }
+
+        String pdfFallbackText = new String(service.exportToPdf(song));
+        assertTrue(pdfFallbackText.contains("Produzent(en): Producer"));
+        assertTrue(pdfFallbackText.contains("Sprache: English"));
+        assertTrue(pdfFallbackText.contains("Genres: Oldies, Shoegaze, neo soul, Ambient Pop, Country"));
+    }
+
+    @Test
     void export_hidesStropheMarkersAndNumbersFirstLine() throws IOException {
         Song song = new Song("Artist", "Paint It Black", "Album");
         SongLine start = new SongLine("[Strophe]", 0);

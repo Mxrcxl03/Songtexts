@@ -17,6 +17,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -299,7 +300,7 @@ public class DocumentExportService {
 
             if (song.getProducer() != null && !song.getProducer().isBlank()) {
                 XWPFParagraph producerParagraph = document.createParagraph();
-                producerParagraph.createRun().setText("Produzent: " + song.getProducer());
+                producerParagraph.createRun().setText("Produzent(en): " + song.getProducer());
             }
 
             if (song.getKeyRoot() != null && !song.getKeyRoot().isBlank()) {
@@ -324,7 +325,13 @@ public class DocumentExportService {
 
             if (song.getLanguage() != null && !song.getLanguage().isBlank()) {
                 XWPFParagraph languageParagraph = document.createParagraph();
-                languageParagraph.createRun().setText("Sprache: " + song.getLanguage());
+                languageParagraph.createRun().setText("Sprache: " + languageDisplayValue(song.getLanguage()));
+            }
+
+            String genres = genresValue(song);
+            if (!genres.isBlank()) {
+                XWPFParagraph genresParagraph = document.createParagraph();
+                genresParagraph.createRun().setText("Genres: " + genres);
             }
 
             XWPFParagraph albumParagraph = document.createParagraph();
@@ -422,7 +429,7 @@ public class DocumentExportService {
             content.append("Komponist: ").append(song.getComposer()).append("\n");
         }
         if (song.getProducer() != null && !song.getProducer().isBlank()) {
-            content.append("Produzent: ").append(song.getProducer()).append("\n");
+            content.append("Produzent(en): ").append(song.getProducer()).append("\n");
         }
         if (song.getKeyRoot() != null && !song.getKeyRoot().isBlank()) {
             content.append("Key: ").append(song.getKeyRoot());
@@ -439,7 +446,11 @@ public class DocumentExportService {
             content.append("Modus: ").append(mode).append("\n");
         }
         if (song.getLanguage() != null && !song.getLanguage().isBlank()) {
-            content.append("Sprache: ").append(song.getLanguage()).append("\n");
+            content.append("Sprache: ").append(languageDisplayValue(song.getLanguage())).append("\n");
+        }
+        String genres = genresValue(song);
+        if (!genres.isBlank()) {
+            content.append("Genres: ").append(genres).append("\n");
         }
         content.append("Album: ").append(song.getAlbum()).append("\n\n");
         content.append(valueOrDash(song.getName())).append("\n\n");
@@ -843,7 +854,9 @@ public class DocumentExportService {
         appendMetaField(meta, indent + "      ", "Interpret (Version)", valueOrDash(song.getInterpretVersion()));
         appendMetaField(meta, indent + "      ", "Kadenz", valueOrDash(song.getCadence()));
         appendMetaField(meta, indent + "      ", "Komponist", valueOrDash(song.getComposer()));
-        appendMetaField(meta, indent + "      ", "Produzent", valueOrDash(song.getProducer()));
+        appendMetaField(meta, indent + "      ", "Produzent(en)", valueOrDash(song.getProducer()));
+        appendMetaField(meta, indent + "      ", "Sprache", valueOrDash(languageDisplayValue(song.getLanguage())));
+        appendMetaField(meta, indent + "      ", "Genres", valueOrDash(genresValue(song)));
         meta.append(indent).append("    </td>\n");
 
         meta.append(indent).append("  </tr>\n");
@@ -867,6 +880,16 @@ public class DocumentExportService {
             return stringValue.isBlank() ? "-" : stringValue;
         }
         return String.valueOf(value);
+    }
+
+    private String genresValue(Song song) {
+        if (song == null || song.getGenres() == null || song.getGenres().isEmpty()) {
+            return "";
+        }
+        return song.getGenres().stream()
+                .filter(genre -> genre != null && !genre.isBlank())
+                .map(String::trim)
+                .collect(Collectors.joining(", "));
     }
 
     private String buildKey(Song song) {
@@ -900,6 +923,21 @@ public class DocumentExportService {
             }
         }
         return null;
+    }
+
+    private String languageDisplayValue(String value) {
+        if (value == null || value.isBlank()) {
+            return value;
+        }
+        String display = value.trim();
+        String normalized = display.toLowerCase(Locale.ROOT);
+        if ("englisch".equals(normalized)) {
+            return "English";
+        }
+        if ("deutsch".equals(normalized)) {
+            return "Deutsch";
+        }
+        return display;
     }
 
     private String ensureViewportMeta(String html) {

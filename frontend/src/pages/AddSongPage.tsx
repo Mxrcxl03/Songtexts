@@ -5,7 +5,7 @@ import SongService from '../services/song.service';
 import SongListService from '../services/songList.service';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { LyricsChordEditor } from '../components/LyricsChordEditor';
-import { GENRE_GROUPS, GENRE_OPTIONS, MAX_GENRES_PER_SONG } from '../constants/genres';
+import { GENRE_GROUPS, GENRE_OPTIONS } from '../constants/genres';
 import { MODE_OPTIONS } from '../constants/modes';
 import type { Song, SongCreate, SongLine } from '../types/song';
 import type { SongList } from '../types/songList';
@@ -14,6 +14,13 @@ import {
   syncSongListAssignments,
   toggleSongListSelection,
 } from '../utils/songListAssignments';
+import {
+  addGenre,
+  isGenreSelected,
+  normalizeGenreList,
+  removeGenre,
+  toggleGenreSelection,
+} from '../utils/genreSelection';
 import '../styles/global.css';
 
 const KEY_ROOT_OPTIONS = [
@@ -106,6 +113,7 @@ export const AddSongPage = () => {
   const [mode, setMode] = useState('');
   const [cadence, setCadence] = useState('');
   const [genres, setGenres] = useState<string[]>([]);
+  const [customGenre, setCustomGenre] = useState('');
   const [runningNumber, setRunningNumber] = useState('');
   const [existingSongs, setExistingSongs] = useState<Song[]>([]);
   const [songLists, setSongLists] = useState<SongList[]>([]);
@@ -216,16 +224,18 @@ export const AddSongPage = () => {
   }
 
   const toggleGenre = (genre: string) => {
-    setGenres((current) => {
-      if (current.includes(genre)) {
-        return current.filter((item) => item !== genre);
-      }
-      if (current.length >= MAX_GENRES_PER_SONG) {
-        alert(`Es sind maximal ${MAX_GENRES_PER_SONG} Genre-Tags pro Song erlaubt.`);
-        return current;
-      }
-      return [...current, genre];
-    });
+    setGenres((current) => toggleGenreSelection(current, genre));
+  };
+
+  const addCustomGenre = () => {
+    setGenres((current) => addGenre(current, customGenre));
+    setCustomGenre('');
+  };
+
+  const handleCustomGenreKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    addCustomGenre();
   };
 
   const toggleSongList = (songListId: number) => {
@@ -249,7 +259,7 @@ export const AddSongPage = () => {
     setLanguage(imported.language ?? '');
     setMode(normalizeModeOption(imported.mode));
     setCadence(imported.cadence ?? '');
-    setGenres(imported.genres ?? []);
+    setGenres(normalizeGenreList(imported.genres));
     setRunningNumber(imported.runningNumber == null ? '' : String(imported.runningNumber));
     setLines(
       imported.lines?.length
@@ -534,9 +544,42 @@ export const AddSongPage = () => {
         </div>
         <div className="form-field">
           <label>
-            Genre (neu): {genres.length}/{MAX_GENRES_PER_SONG} ausgewählt (
-            {GENRE_OPTIONS.length} Genres insgesamt)
+            Genre (neu): {genres.length} ausgewählt ({GENRE_OPTIONS.length} Genres insgesamt)
           </label>
+          <div className="genre-custom-row">
+            <input
+              type="text"
+              value={customGenre}
+              onChange={(e) => setCustomGenre(e.target.value)}
+              onKeyDown={handleCustomGenreKeyDown}
+              list="genre-suggestions-add"
+              placeholder="Eigenes Genre hinzufuegen"
+              className="text-input"
+            />
+            <datalist id="genre-suggestions-add">
+              {GENRE_OPTIONS.map((genre) => (
+                <option key={genre} value={genre} />
+              ))}
+            </datalist>
+            <button type="button" onClick={addCustomGenre} className="primary-button btn-neutral">
+              Hinzufuegen
+            </button>
+          </div>
+          {genres.length > 0 && (
+            <div className="genre-selected-list" aria-label="Ausgewaehlte Genres">
+              {genres.map((genre) => (
+                <button
+                  key={genre}
+                  type="button"
+                  className="genre-selected-item"
+                  onClick={() => setGenres((current) => removeGenre(current, genre))}
+                  title={`${genre} entfernen`}
+                >
+                  {genre}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="genre-checkbox-grid">
             {GENRE_GROUPS.map((group) => (
               <section key={group.label} className="genre-checkbox-group">
@@ -546,9 +589,8 @@ export const AddSongPage = () => {
                     <label key={genre} className="genre-checkbox-item">
                       <input
                         type="checkbox"
-                        checked={genres.includes(genre)}
+                        checked={isGenreSelected(genres, genre)}
                         onChange={() => toggleGenre(genre)}
-                        disabled={!genres.includes(genre) && genres.length >= MAX_GENRES_PER_SONG}
                       />
                       <span>{genre}</span>
                     </label>
