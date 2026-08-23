@@ -20,6 +20,16 @@ export const deleteUserById = async (userId: number): Promise<void> => {
   });
 };
 
+export const updateUserById = async (
+  userId: number,
+  data: Partial<Pick<User, 'username' | 'email' | 'role' | 'uploadRequested' | 'uploadApproved'>>
+): Promise<User> => {
+  const response = await api.put<User>(`/public/user/${userId}`, data, {
+    withCredentials: true,
+  });
+  return response.data;
+};
+
 export const getCurrentUser = async (): Promise<User | null> => {
   try {
     const response = await api.get<User>("/public/user/me", { withCredentials: true });
@@ -28,6 +38,17 @@ export const getCurrentUser = async (): Promise<User | null> => {
     console.error("Fehler beim Abrufen des aktuellen Benutzers:", error);
     return null;
   }
+};
+
+export const updateCurrentUser = async (data: {
+  username?: string;
+  email?: string;
+  uploadRequested?: boolean;
+}): Promise<User> => {
+  const response = await api.put<User>('/public/user/me', data, {
+    withCredentials: true,
+  });
+  return response.data;
 };
 
 export const getPendingRegistrationRequests = async (): Promise<
@@ -78,8 +99,10 @@ export const getLoginHistory = async (userId?: number): Promise<LoginEvent[]> =>
 const UserService = {
   getUser,
   getAllUsers,
+  updateUserById,
   deleteUserById,
   getCurrentUser,
+  updateCurrentUser,
   getPendingRegistrationRequests,
   approveRegistrationRequest,
   rejectRegistrationRequest,

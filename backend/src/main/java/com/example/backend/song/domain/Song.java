@@ -2,9 +2,13 @@ package com.example.backend.song.domain;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import com.example.backend.user.domain.User;
 
 @Entity
 @Table(name = "song")
@@ -57,6 +61,11 @@ public class Song {
 
     @Column(nullable = false)
     private String album;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "uploader_id")
+    @OnDelete(action = OnDeleteAction.SET_NULL)
+    private User uploader;
 
     @Column
     private Integer bpm;

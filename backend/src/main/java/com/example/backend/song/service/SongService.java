@@ -24,6 +24,7 @@ import org.springframework.stereotype.Service;
 import com.example.backend.song.api.dto.ChordAnnotationDTO;
 import com.example.backend.song.domain.SongLine;
 import com.example.backend.song.api.dto.SongLineDTO;
+import com.example.backend.user.domain.User;
 
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
@@ -41,6 +42,11 @@ public class SongService {
 
     @Transactional
     public SongResponse createSong(SongRequest req) {
+        return createSong(req, null);
+    }
+
+    @Transactional
+    public SongResponse createSong(SongRequest req, User uploader) {
         ensureRunningNumbersAssigned();
 
         Song song = new Song(
@@ -60,6 +66,7 @@ public class SongService {
                 normalizeOptionalTag(req.getKeyRoot()),
                 normalizeOptionalTag(req.getKeySuffix()),
                 normalizeOptionalTag(req.getPlay()));
+        song.setUploader(uploader);
         song.setMode(normalizeMode(req.getMode()));
         song.setRunningNumber(resolveRunningNumber(req.getRunningNumber(), null));
         song.setGenres(normalizeGenres(req.getGenres()));
@@ -129,6 +136,7 @@ public class SongService {
                 s.getArtist(),
                 s.getName(),
                 s.getAlbum(),
+                uploaderName(s),
                 s.getBpm(),
                 s.getCapo(),
                 s.getLanguage(),
@@ -282,6 +290,7 @@ public class SongService {
                 song.getArtist(),
                 song.getName(),
                 song.getAlbum(),
+                uploaderName(song),
                 song.getBpm(),
                 song.getCapo(),
                 song.getLanguage(),
@@ -440,6 +449,13 @@ public class SongService {
         }
 
         return song.getRunningNumber();
+    }
+
+    private String uploaderName(Song song) {
+        if (song == null || song.getUploader() == null) {
+            return null;
+        }
+        return song.getUploader().getUsername();
     }
 
     private void ensureRunningNumbersAssigned() {

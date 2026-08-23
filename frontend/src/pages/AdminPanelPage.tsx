@@ -13,11 +13,13 @@ export const AdminPanelPage = () => {
   const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loginHistoryQuery, setLoginHistoryQuery] = useState('');
   const [busyRequest, setBusyRequest] = useState<{
     id: number;
     action: 'approve' | 'reject';
   } | null>(null);
   const [busyUserId, setBusyUserId] = useState<number | null>(null);
+  const [usernameDrafts, setUsernameDrafts] = useState<Record<number, string>>({});
 
   const pendingRequests = useMemo(
     () => requests.filter((request) => request.status === 'PENDING'),
@@ -50,10 +52,23 @@ export const AdminPanelPage = () => {
       userId: user.id,
       isSelf: currentUser?.id === user.id,
       isAdmin: user.role === 'ADMIN',
+      uploadRequested: user.uploadRequested,
+      uploadApproved: user.uploadApproved,
     }));
 
     return [...pendingRows, ...userRows];
   }, [pendingRequests, users, currentUser]);
+
+  const filteredLoginEvents = useMemo(() => {
+    const query = loginHistoryQuery.trim().toLowerCase();
+    if (!query) return loginEvents;
+
+    return loginEvents.filter((event) =>
+      [event.username, event.email]
+        .map((value) => String(value ?? '').toLowerCase())
+        .some((value) => value.includes(query))
+    );
+  }, [loginEvents, loginHistoryQuery]);
 
   const loadAdminData = async () => {
     setLoading(true);
@@ -69,6 +84,9 @@ export const AdminPanelPage = () => {
       ]);
       setRequests(pending);
       setUsers(allUsers);
+      setUsernameDrafts(
+        Object.fromEntries(allUsers.map((user) => [user.id, user.username]))
+      );
       setCurrentUser(me);
       setLoginEvents(history);
     } catch (e: any) {
@@ -159,6 +177,69 @@ export const AdminPanelPage = () => {
     }
   };
 
+  const handleSaveUsername = async (user: User) => {
+    const nextUsername = (usernameDrafts[user.id] ?? '').trim();
+    if (!nextUsername) {
+      setError('Benutzername darf nicht leer sein.');
+      return;
+    }
+    if (nextUsername === user.username) return;
+
+    setBusyUserId(user.id);
+    setError(null);
+    try {
+      const updatedUser = await UserService.updateUserById(user.id, {
+        username: nextUsername,
+      });
+      setUsers((prev) =>
+        prev.map((item) => (item.id === user.id ? updatedUser : item))
+      );
+      setUsernameDrafts((prev) => ({
+        ...prev,
+        [updatedUser.id]: updatedUser.username,
+      }));
+      if (currentUser?.id === updatedUser.id) {
+        const refreshed = await UserService.updateCurrentUser({
+          username: updatedUser.username,
+        });
+        setCurrentUser(refreshed);
+      }
+    } catch (e: any) {
+      const message =
+        e?.response?.data?.message ??
+        e?.message ??
+        'Benutzername konnte nicht gespeichert werden.';
+      setError(message);
+    } finally {
+      setBusyUserId(null);
+    }
+  };
+
+  const handleToggleUploadApproved = async (user: User, uploadApproved: boolean) => {
+    setBusyUserId(user.id);
+    setError(null);
+    try {
+      const updatedUser = await UserService.updateUserById(user.id, {
+        uploadApproved,
+        uploadRequested: uploadApproved ? true : user.uploadRequested,
+      });
+      setUsers((prev) =>
+        prev.map((item) => (item.id === user.id ? updatedUser : item))
+      );
+      if (currentUser?.id === updatedUser.id) {
+        setCurrentUser(updatedUser);
+      }
+    } catch (e: any) {
+      const message =
+        e?.response?.data?.message ??
+        e?.message ??
+        'Upload-Freischaltung konnte nicht gespeichert werden.';
+      setError(message);
+    } finally {
+      setBusyUserId(null);
+    }
+  };
+
   return (
     <div className="page">
       <div className="header-row">
@@ -189,19 +270,65 @@ export const AdminPanelPage = () => {
                 <th>Email</th>
                 <th>Zeitstempel</th>
                 <th>Status</th>
+                <th>Upload</th>
                 <th>Aktion</th>
               </tr>
             </thead>
             <tbody>
               {tableRows.map((row) => (
                 <tr key={row.key}>
-                  <td>{row.username}</td>
+                  <td>
+                    {row.actionType === 'delete' && row.userId !== undefined ? (
+                      <input
+                        className="text-input admin-username-input"
+                        value={usernameDrafts[row.userId] ?? row.username}
+                        onChange={(event) =>
+                          setUsernameDrafts((prev) => ({
+                            ...prev,
+                            [row.userId!]: event.target.value,
+                          }))
+                        }
+                        disabled={busyUserId === row.userId}
+                        aria-label={`Benutzername fuer ${row.username}`}
+                      />
+                    ) : (
+                      row.username
+                    )}
+                  </td>
                   <td>{row.email}</td>
                   <td>{row.timestamp}</td>
                   <td>
                     <span className={`song-tag ${row.statusClass}`}>
                       {row.statusLabel}
                     </span>
+                  </td>
+                  <td>
+                    {row.actionType === 'delete' && row.userId !== undefined ? (
+                      <label className="admin-upload-toggle">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(row.isAdmin || row.uploadApproved)}
+                          onChange={(event) => {
+                            const user = users.find(
+                              (entry) => entry.id === row.userId
+                            );
+                            if (user) {
+                              handleToggleUploadApproved(user, event.target.checked);
+                            }
+                          }}
+                          disabled={busyUserId === row.userId || Boolean(row.isAdmin)}
+                        />
+                        <span>
+                          {row.isAdmin || row.uploadApproved
+                            ? 'Freigeschaltet'
+                            : row.uploadRequested
+                              ? 'Beantragt'
+                              : 'Nicht beantragt'}
+                        </span>
+                      </label>
+                    ) : (
+                      '-'
+                    )}
                   </td>
                   <td>
                     {row.actionType === 'review' &&
@@ -231,7 +358,25 @@ export const AdminPanelPage = () => {
                       )}
                     {row.actionType === 'delete' &&
                       row.userId !== undefined && (
-                        !row.isAdmin && (
+                        <div className="button-row">
+                          <button
+                            className="song-small-btn btn-overwrite"
+                            onClick={() => {
+                              const user = users.find(
+                                (entry) => entry.id === row.userId
+                              );
+                              if (user) {
+                                handleSaveUsername(user);
+                              }
+                            }}
+                            disabled={
+                              busyUserId === row.userId ||
+                              (usernameDrafts[row.userId] ?? row.username).trim() === row.username
+                            }
+                          >
+                            Speichern
+                          </button>
+                          {!row.isAdmin && (
                           <button
                             className="song-small-btn btn-delete"
                             onClick={() => {
@@ -253,7 +398,8 @@ export const AdminPanelPage = () => {
                               ? 'Loescht...'
                               : 'Entfernen'}
                           </button>
-                        )
+                          )}
+                        </div>
                       )}
                   </td>
                 </tr>
@@ -269,13 +415,31 @@ export const AdminPanelPage = () => {
             <h3>Login-Historie</h3>
           </div>
 
+          <div className="admin-history-search-row">
+            <label className="sr-only" htmlFor="login-history-search">
+              Login-Historie nach Nutzer suchen
+            </label>
+            <input
+              id="login-history-search"
+              className="text-input"
+              type="search"
+              value={loginHistoryQuery}
+              onChange={(event) => setLoginHistoryQuery(event.target.value)}
+              placeholder="Login-Historie nach Nutzer suchen..."
+            />
+          </div>
+
           {historyLoading && <p>Lade Login-Historie...</p>}
 
           {!historyLoading && loginEvents.length === 0 && (
             <p>Keine Login-Eintraege gefunden.</p>
           )}
 
-          {!historyLoading && loginEvents.length > 0 && (
+          {!historyLoading && loginEvents.length > 0 && filteredLoginEvents.length === 0 && (
+            <p>Keine Login-Eintraege fuer diese Suche gefunden.</p>
+          )}
+
+          {!historyLoading && filteredLoginEvents.length > 0 && (
             <div className="table-wrap">
               <table className="admin-table">
                 <thead>
@@ -286,7 +450,7 @@ export const AdminPanelPage = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {loginEvents.map((event) => (
+                  {filteredLoginEvents.map((event) => (
                     <tr key={event.id}>
                       <td>{event.username}</td>
                       <td>{event.email}</td>

@@ -211,6 +211,7 @@ export function SongListsPage() {
   const [formFolderKey, setFormFolderKey] = useState('custom:Göhren');
   const [formSongIds, setFormSongIds] = useState<number[]>([]);
   const [songToAdd, setSongToAdd] = useState<string>('');
+  const [songUploaderToAdd, setSongUploaderToAdd] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [customFolders, setCustomFolders] = useState<string[]>(() =>
     readStringArrayFromStorage(CUSTOM_FOLDER_STORAGE_KEY, DEFAULT_CUSTOM_FOLDERS)
@@ -280,9 +281,29 @@ export function SongListsPage() {
   const isAdmin = currentUser?.role === 'ADMIN';
   const canManageLists = isAdmin && isOnline;
 
+  const uploaderOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          allSongs
+            .map((song) => String(song.uploader ?? '').trim())
+            .filter((value) => value !== '')
+        )
+      ).sort((a, b) => a.localeCompare(b, 'de', { sensitivity: 'base' })),
+    [allSongs]
+  );
+
   const availableSongsForAdd = useMemo(
-    () => allSongs.filter((song) => !formSongIds.includes(song.id)),
-    [allSongs, formSongIds]
+    () =>
+      allSongs.filter((song) => {
+        const matchesUploader =
+          songUploaderToAdd.trim() === '' ||
+          String(song.uploader ?? '').trim().localeCompare(songUploaderToAdd, 'de', {
+            sensitivity: 'base',
+          }) === 0;
+        return matchesUploader && !formSongIds.includes(song.id);
+      }),
+    [allSongs, formSongIds, songUploaderToAdd]
   );
 
   const persistCustomFolders = (nextFolders: string[]) => {
@@ -351,6 +372,7 @@ export function SongListsPage() {
     setFormFolderKey(folderKey.startsWith('custom:') ? folderKey : 'custom:Göhren');
     setFormSongIds([]);
     setSongToAdd('');
+    setSongUploaderToAdd('');
     setError(null);
   };
 
@@ -373,6 +395,7 @@ export function SongListsPage() {
         .map((item) => item.songId)
     );
     setSongToAdd('');
+    setSongUploaderToAdd('');
     setError(null);
   };
 
@@ -381,6 +404,7 @@ export function SongListsPage() {
     setFormName('');
     setFormSongIds([]);
     setSongToAdd('');
+    setSongUploaderToAdd('');
   };
 
   const createFolder = () => {
@@ -790,6 +814,26 @@ export function SongListsPage() {
                   className="text-input"
                   maxLength={120}
                 />
+              </div>
+
+              <div className="form-field">
+                <label htmlFor="song-list-add-uploader">Uploaded by</label>
+                <select
+                  id="song-list-add-uploader"
+                  className="text-input"
+                  value={songUploaderToAdd}
+                  onChange={(event) => {
+                    setSongUploaderToAdd(event.target.value);
+                    setSongToAdd('');
+                  }}
+                >
+                  <option value="">Alle</option>
+                  {uploaderOptions.map((uploader) => (
+                    <option key={uploader} value={uploader}>
+                      uploaded by: {uploader}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="form-field">

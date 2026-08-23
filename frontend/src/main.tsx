@@ -22,6 +22,7 @@ import { SongDetailPage } from './pages/SongDetailPage.tsx';
 import { SongListsPage } from './pages/SongListsPage.tsx';
 import Navbar from './components/NavBar.tsx';
 import { RequireAdminRoute } from './routes/RequireAdminRoute.tsx';
+import { RequireUploadRoute } from './routes/RequireUploadRoute.tsx';
 
 const sendClearSongCache = async () => {
   const message = { type: 'CLEAR_SONG_CACHE' };
@@ -108,9 +109,9 @@ function AppLayout() {
           path="/songAdd"
           element={
             <PrivateRoute>
-              <RequireAdminRoute>
+              <RequireUploadRoute>
                 <AddSongPage />
-              </RequireAdminRoute>
+              </RequireUploadRoute>
             </PrivateRoute>
           }
         />

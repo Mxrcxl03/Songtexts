@@ -355,6 +355,11 @@ public class DocumentExportService {
             XWPFParagraph albumParagraph = document.createParagraph();
             albumParagraph.createRun().setText("Album: " + song.getAlbum());
 
+            if (uploaderValue(song) != null) {
+                XWPFParagraph uploaderParagraph = document.createParagraph();
+                uploaderParagraph.createRun().setText("Uploader: " + uploaderValue(song));
+            }
+
             // Empty line
             document.createParagraph();
 
@@ -477,7 +482,11 @@ public class DocumentExportService {
         if (!genres.isBlank()) {
             content.append("Genres: ").append(genres).append("\n");
         }
-        content.append("Album: ").append(song.getAlbum()).append("\n\n");
+        content.append("Album: ").append(song.getAlbum()).append("\n");
+        if (uploaderValue(song) != null) {
+            content.append("Uploader: ").append(uploaderValue(song)).append("\n");
+        }
+        content.append("\n");
         content.append(valueOrDash(song.getName())).append("\n\n");
 
         for (ExportSongLine line : buildExportLines(song.getLines())) {
@@ -991,6 +1000,7 @@ public class DocumentExportService {
         appendMetaField(meta, indent + "      ", "Produzent(en)", valueOrDash(song.getProducer()));
         appendMetaField(meta, indent + "      ", "Sprache", valueOrDash(languageDisplayValue(song.getLanguage())));
         appendMetaField(meta, indent + "      ", "Genres", valueOrDash(genresValue(song)));
+        appendMetaField(meta, indent + "      ", "Uploader", valueOrDash(uploaderValue(song)));
         meta.append(indent).append("    </td>\n");
 
         meta.append(indent).append("  </tr>\n");
@@ -1024,6 +1034,14 @@ public class DocumentExportService {
                 .filter(genre -> genre != null && !genre.isBlank())
                 .map(String::trim)
                 .collect(Collectors.joining(", "));
+    }
+
+    private String uploaderValue(Song song) {
+        if (song == null || song.getUploader() == null || song.getUploader().getUsername() == null
+                || song.getUploader().getUsername().isBlank()) {
+            return null;
+        }
+        return song.getUploader().getUsername().trim();
     }
 
     private String buildKey(Song song) {

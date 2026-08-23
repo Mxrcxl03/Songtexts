@@ -23,6 +23,7 @@ export const HomePage = () => {
   const [artistOriginalFilter, setArtistOriginalFilter] = useState('');
   const [interpretVersionFilter, setInterpretVersionFilter] = useState('');
   const [albumFilter, setAlbumFilter] = useState('');
+  const [uploaderFilters, setUploaderFilters] = useState<string[]>([]);
   const [modeFilter, setModeFilter] = useState('');
   const [genreFilter, setGenreFilter] = useState('');
   const [yearFilter, setYearFilter] = useState('');
@@ -42,6 +43,14 @@ export const HomePage = () => {
 
   const albumOptions = Array.from(
     new Set(songs.map((song) => song.album).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b));
+
+  const uploaderOptions = Array.from(
+    new Set(
+      songs
+        .map((song) => String(song.uploader ?? '').trim())
+        .filter((value) => value !== '')
+    )
   ).sort((a, b) => a.localeCompare(b));
 
   const modeOptions = Array.from(
@@ -78,6 +87,7 @@ export const HomePage = () => {
     artistOriginalFilter.trim() !== '' ||
     interpretVersionFilter.trim() !== '' ||
     albumFilter.trim() !== '' ||
+    uploaderFilters.length > 0 ||
     modeFilter.trim() !== '' ||
     genreFilter.trim() !== '' ||
     yearFilter.trim() !== '';
@@ -94,9 +104,18 @@ export const HomePage = () => {
     setArtistOriginalFilter('');
     setInterpretVersionFilter('');
     setAlbumFilter('');
+    setUploaderFilters([]);
     setModeFilter('');
     setGenreFilter('');
     setYearFilter('');
+  };
+
+  const toggleUploaderFilter = (uploader: string) => {
+    setUploaderFilters((current) =>
+      current.some((item) => item.toLowerCase() === uploader.toLowerCase())
+        ? current.filter((item) => item.toLowerCase() !== uploader.toLowerCase())
+        : [...current, uploader]
+    );
   };
 
   const toPaddedRunningNumber = (runningNumber: number | null | undefined) =>
@@ -256,6 +275,7 @@ export const HomePage = () => {
           s.artist,
           s.interpretVersion ?? '',
           s.album,
+          s.uploader ?? '',
         ].join(' ')
       );
       const matchesQuery =
@@ -281,6 +301,11 @@ export const HomePage = () => {
       const matchesAlbum =
         albumFilter.trim() === '' ||
         s.album.toLowerCase() === albumFilter.toLowerCase();
+      const matchesUploader =
+        uploaderFilters.length === 0 ||
+        uploaderFilters
+          .map((uploader) => uploader.trim().toLowerCase())
+          .includes(String(s.uploader ?? '').trim().toLowerCase());
       const matchesMode =
         modeFilter.trim() === '' ||
         String(s.mode ?? '').trim().toLowerCase() ===
@@ -297,6 +322,7 @@ export const HomePage = () => {
         matchesArtistOriginal &&
         matchesInterpretVersion &&
         matchesAlbum &&
+        matchesUploader &&
         matchesMode &&
         matchesGenre &&
         matchesYear
@@ -309,6 +335,7 @@ export const HomePage = () => {
     artistOriginalFilter,
     interpretVersionFilter,
     albumFilter,
+    uploaderFilters,
     modeFilter,
     genreFilter,
     yearFilter,
@@ -318,6 +345,7 @@ export const HomePage = () => {
   if (error) return <div>Fehler: {error}</div>;
   const isAdmin = currentUser?.role === 'ADMIN';
   const canAdminEdit = isAdmin && isOnline;
+  const canUploadSongs = Boolean((isAdmin || currentUser?.uploadApproved) && isOnline);
 
   return (
     <div className="page home-page">
@@ -341,7 +369,7 @@ export const HomePage = () => {
               Export All
             </button>
           )}
-          {canAdminEdit && (
+          {canUploadSongs && (
             <button
               onClick={() => navigate('/songAdd')}
               className="primary-button btn-edit"
@@ -358,7 +386,7 @@ export const HomePage = () => {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Nach Nr, Titel, Interpret Original, Interpret Version oder Album suchen..."
+            placeholder="Nach Nr, Titel, Interpret Original, Interpret Version, Album oder Uploader suchen..."
             className="search-input"
           />
 
@@ -463,6 +491,43 @@ export const HomePage = () => {
                     </option>
                   ))}
                 </select>
+
+                <span className="filter-label" id="uploader-filter-label">
+                  Uploader
+                </span>
+                <details
+                  id="uploader-filter"
+                  className="filter-control filter-checkbox-dropdown"
+                  aria-labelledby="uploader-filter-label"
+                >
+                  <summary>
+                    {uploaderFilters.length === 0
+                      ? 'Alle'
+                      : `Uploaded by: ${uploaderFilters.join(', ')}`}
+                  </summary>
+                  <div className="filter-checkbox-options">
+                    <label className="filter-checkbox-item">
+                      <input
+                        type="checkbox"
+                        checked={uploaderFilters.length === 0}
+                        onChange={() => setUploaderFilters([])}
+                      />
+                      <span>Alle</span>
+                    </label>
+                    {uploaderOptions.map((uploader) => (
+                      <label key={uploader} className="filter-checkbox-item">
+                        <input
+                          type="checkbox"
+                          checked={uploaderFilters.some(
+                            (item) => item.toLowerCase() === uploader.toLowerCase()
+                          )}
+                          onChange={() => toggleUploaderFilter(uploader)}
+                        />
+                        <span>uploaded by: {uploader}</span>
+                      </label>
+                    ))}
+                  </div>
+                </details>
 
                 <label className="filter-label" htmlFor="mode-filter">
                   Modus

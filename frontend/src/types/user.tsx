@@ -3,4 +3,6 @@ export type User = {
   username: string;
   email: string;
   role: string;
+  uploadRequested: boolean;
+  uploadApproved: boolean;
 };

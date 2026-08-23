@@ -127,7 +127,8 @@ CREATE TABLE public.song (
     running_number bigint,
     song_year integer,
     time_signature character varying(255),
-    mode character varying(255)
+    mode character varying(255),
+    uploader_id bigint
 );
 
 
@@ -245,6 +246,8 @@ CREATE TABLE public."user" (
     password character varying(255) NOT NULL,
     role character varying(255) NOT NULL,
     username character varying(255) NOT NULL,
+    upload_requested boolean DEFAULT false NOT NULL,
+    upload_approved boolean DEFAULT false NOT NULL,
     CONSTRAINT user_role_check CHECK (((role)::text = ANY ((ARRAY['USER'::character varying, 'ADMIN'::character varying])::text[])))
 );
 
@@ -374,6 +377,13 @@ ALTER TABLE ONLY public."user"
 
 
 --
+-- Name: idx_song_uploader_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_song_uploader_id ON public.song USING btree (uploader_id);
+
+
+--
 -- Name: song_line fk2opgy7yfvxbl7f4jovh36u97d; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -387,6 +397,14 @@ ALTER TABLE ONLY public.song_line
 
 ALTER TABLE ONLY public.song_line_chord
     ADD CONSTRAINT fk2q780fbqbcmj6rky19jiiat92 FOREIGN KEY (song_line_id) REFERENCES public.song_line(id);
+
+
+--
+-- Name: song fk_song_uploader; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.song
+    ADD CONSTRAINT fk_song_uploader FOREIGN KEY (uploader_id) REFERENCES public."user"(id) ON DELETE SET NULL;
 
 
 --
@@ -432,3 +450,4 @@ ALTER TABLE ONLY public.login_event
 --
 -- PostgreSQL database dump complete
 --
+

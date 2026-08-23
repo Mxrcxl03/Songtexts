@@ -9,6 +9,8 @@ import { GENRE_GROUPS, GENRE_OPTIONS } from '../constants/genres';
 import { MODE_OPTIONS } from '../constants/modes';
 import type { Song, SongCreate, SongLine } from '../types/song';
 import type { SongList } from '../types/songList';
+import type { User } from '../types/user';
+import UserService from '../services/user.service';
 import {
   getManualSongLists,
   syncSongListAssignments,
@@ -118,6 +120,7 @@ export const AddSongPage = () => {
   const [existingSongs, setExistingSongs] = useState<Song[]>([]);
   const [songLists, setSongLists] = useState<SongList[]>([]);
   const [selectedSongListIds, setSelectedSongListIds] = useState<number[]>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [lines, setLines] = useState<SongLine[]>([
     { orderIndex: 0, text: '', chordAnnotations: [] },
   ]);
@@ -127,15 +130,21 @@ export const AddSongPage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    Promise.all([SongService.getSongContent(), SongListService.getAllSongLists()])
-      .then(([songsResponse, songListsResponse]) => {
+    Promise.all([
+      SongService.getSongContent(),
+      SongListService.getAllSongLists().catch(() => ({ data: [] })),
+      UserService.getCurrentUser(),
+    ])
+      .then(([songsResponse, songListsResponse, user]) => {
         setExistingSongs(songsResponse.data as Song[]);
         setSongLists(songListsResponse.data as SongList[]);
+        setCurrentUser(user);
       })
       .catch((err) => console.error('Formulardaten konnten nicht geladen werden:', err));
   }, []);
 
   const manualSongLists = useMemo(() => getManualSongLists(songLists), [songLists]);
+  const isAdmin = currentUser?.role === 'ADMIN';
 
   const parsedRunningNumber = useMemo(
     () => toOptionalPositiveNumber(runningNumber),
@@ -193,7 +202,9 @@ export const AddSongPage = () => {
         lines,
       });
       const createdSong = createdSongResponse.data as Song;
-      await syncSongListAssignments(manualSongLists, selectedSongListIds, createdSong.id);
+      if (isAdmin) {
+        await syncSongListAssignments(manualSongLists, selectedSongListIds, createdSong.id);
+      }
 
       navigate('/');
     } catch (err) {
@@ -601,25 +612,27 @@ export const AddSongPage = () => {
           </div>
         </div>
 
-        <div className="form-field">
-          <label>Songlisten:</label>
-          {manualSongLists.length > 0 ? (
-            <div className="song-list-checkbox-grid">
-              {manualSongLists.map((songList) => (
-                <label key={songList.id} className="song-list-checkbox-item">
-                  <input
-                    type="checkbox"
-                    checked={selectedSongListIds.includes(songList.id)}
-                    onChange={() => toggleSongList(songList.id)}
-                  />
-                  <span>{songList.name}</span>
-                </label>
-              ))}
-            </div>
-          ) : (
-            <p className="field-hint">Keine manuellen Songlisten vorhanden.</p>
-          )}
-        </div>
+        {isAdmin && (
+          <div className="form-field">
+            <label>Songlisten:</label>
+            {manualSongLists.length > 0 ? (
+              <div className="song-list-checkbox-grid">
+                {manualSongLists.map((songList) => (
+                  <label key={songList.id} className="song-list-checkbox-item">
+                    <input
+                      type="checkbox"
+                      checked={selectedSongListIds.includes(songList.id)}
+                      onChange={() => toggleSongList(songList.id)}
+                    />
+                    <span>{songList.name}</span>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <p className="field-hint">Keine manuellen Songlisten vorhanden.</p>
+            )}
+          </div>
+        )}
 
         <div className="form-field">
           <label>Lyrics & Akkorde</label>

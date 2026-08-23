@@ -38,8 +38,10 @@ class UserServiceTest {
     void getAllUsers_mapsAllFields() {
         User anna = new User("anna", "anna@example.org", "pw", Role.USER);
         anna.setId(1L);
+        anna.setUploadRequested(true);
         User ben = new User("ben", "ben@example.org", "pw", Role.ADMIN);
         ben.setId(2L);
+        ben.setUploadApproved(true);
 
         when(userRepository.findAll()).thenReturn(List.of(anna, ben));
 
@@ -47,7 +49,9 @@ class UserServiceTest {
 
         assertEquals(2, users.size());
         assertEquals("anna", users.get(0).getUsername());
+        assertTrue(users.get(0).isUploadRequested());
         assertEquals(Role.ADMIN, users.get(1).getRole());
+        assertTrue(users.get(1).isUploadApproved());
     }
 
     @Test
@@ -58,13 +62,32 @@ class UserServiceTest {
         when(userRepository.findById(3L)).thenReturn(Optional.of(user));
         when(userRepository.save(user)).thenReturn(user);
 
-        UserRequest request = new UserRequest("new-name", null, Role.ADMIN);
+        UserRequest request = new UserRequest("new-name", null, Role.ADMIN, true, true);
 
         UserResponse response = userService.updateUser(3L, request);
 
         assertEquals("new-name", response.getUsername());
         assertEquals("old@example.org", response.getEmail());
         assertEquals(Role.ADMIN, response.getRole());
+        assertTrue(response.isUploadRequested());
+        assertTrue(response.isUploadApproved());
+    }
+
+    @Test
+    void updateCurrentUser_canRequestUploadButCannotApproveItself() {
+        User user = new User("anna", "anna@example.org", "pw", Role.USER);
+        user.setId(5L);
+
+        when(userRepository.findById(5L)).thenReturn(Optional.of(user));
+        when(userRepository.save(user)).thenReturn(user);
+
+        UserRequest request = new UserRequest(null, null, Role.ADMIN, true, true);
+
+        UserResponse response = userService.updateCurrentUser(5L, request);
+
+        assertTrue(response.isUploadRequested());
+        assertEquals(Role.USER, response.getRole());
+        assertEquals(false, response.isUploadApproved());
     }
 
     @Test

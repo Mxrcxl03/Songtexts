@@ -10,4 +10,6 @@ public class UserRequest {
     private String username;
     private String email;
     private Role role;
+    private Boolean uploadRequested;
+    private Boolean uploadApproved;
 }

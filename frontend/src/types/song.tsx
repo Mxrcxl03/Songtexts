@@ -14,6 +14,7 @@ export type Song = {
   interpretVersion?: string | null;
   name: string;
   album: string;
+  uploader?: string | null;
   bpm?: number | null;
   capo?: number | null;
   language?: string | null;

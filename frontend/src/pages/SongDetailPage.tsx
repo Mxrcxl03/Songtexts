@@ -311,6 +311,7 @@ export function SongDetailPage() {
 
   const isAdmin = currentUser?.role === 'ADMIN';
   const canAdminEdit = isAdmin && isOnline;
+  const canUploadSongs = Boolean((isAdmin || currentUser?.uploadApproved) && isOnline);
   const keyRootDisplay = toDisplayString(song.keyRoot);
   const keySuffixDisplay = toDisplayString(song.keySuffix);
   const keyDisplay = [keyRootDisplay, keySuffixDisplay ? `(${keySuffixDisplay})` : '']
@@ -357,6 +358,14 @@ export function SongDetailPage() {
               Export
             </button>
           )}
+          {canUploadSongs && !canAdminEdit && (
+            <button
+              onClick={() => navigate('/songAdd')}
+              className="primary-button btn-edit"
+            >
+              + Song hinzufügen
+            </button>
+          )}
           {canAdminEdit && (
             <button
               onClick={() => navigate(`/song/${song.id}/edit`)}
@@ -396,6 +405,10 @@ export function SongDetailPage() {
           <p className="song-meta-item">
             <strong className="song-meta-item-label">Album:</strong>
             <span className="song-meta-item-value">{toMetaValue(song.album)}</span>
+          </p>
+          <p className="song-meta-item">
+            <strong className="song-meta-item-label">Uploader:</strong>
+            <span className="song-meta-item-value">{toMetaValue(song.uploader)}</span>
           </p>
         </div>
         <div className="song-meta-column">

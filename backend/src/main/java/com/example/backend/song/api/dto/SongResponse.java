@@ -14,6 +14,7 @@ public class SongResponse {
     private String artist;
     private String name;
     private String album;
+    private String uploader;
     private Integer bpm;
     private Integer capo;
     private String language;

@@ -3,9 +3,12 @@ package com.example.backend.user.api;
 import java.util.*;
 
 import com.example.backend.user.domain.User;
+import com.example.backend.security.jwt.JwtService;
 import com.example.backend.user.api.dto.UserRequest;
 import com.example.backend.user.api.dto.UserResponse;
 import com.example.backend.user.service.UserService;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -21,9 +24,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserController {
 
     private UserService userService;
+    private JwtService jwtService;
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService, JwtService jwtService) {
         this.userService = userService;
+        this.jwtService = jwtService;
     }
 
     // GET
@@ -43,7 +48,9 @@ public class UserController {
                 user.getId(),
                 user.getUsername(),
                 user.getEmail(),
-                user.getRole()));
+                user.getRole(),
+                user.isUploadRequested(),
+                user.isUploadApproved()));
     }
 
     @GetMapping("/{id}")
@@ -52,6 +59,23 @@ public class UserController {
     }
 
     // PUT
+    @PutMapping("/me")
+    public ResponseEntity<UserResponse> updateCurrentUser(
+            @AuthenticationPrincipal User user,
+            @RequestBody UserRequest request) {
+        if (user == null) {
+            return ResponseEntity.status(401).build();
+        }
+
+        UserResponse updatedUser = userService.updateCurrentUser(user.getId(), request);
+        User updatedPrincipal = new User();
+        updatedPrincipal.setUsername(updatedUser.getUsername());
+        ResponseCookie jwtCookie = jwtService.generateJwtCookie(updatedPrincipal);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, jwtCookie.toString())
+                .body(updatedUser);
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<UserResponse> updateUser(
             @PathVariable Long id,

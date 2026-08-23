@@ -7,10 +7,14 @@ import com.example.backend.song.api.dto.SongResponse;
 import com.example.backend.song.service.SongService;
 import com.example.backend.song.service.DocumentExportService;
 import com.example.backend.song.service.DocumentImportService;
+import com.example.backend.user.domain.Role;
+import com.example.backend.user.domain.User;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -45,16 +49,22 @@ public class SongController {
     }
 
     @PostMapping
-    public ResponseEntity<SongResponse> create(@RequestBody SongRequest request) {
-        SongResponse saved = songService.createSong(request);
+    public ResponseEntity<SongResponse> create(
+            @RequestBody SongRequest request,
+            @AuthenticationPrincipal User uploader) {
+        assertCanUpload(uploader);
+        SongResponse saved = songService.createSong(request, uploader);
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
     @PostMapping(path = "/import/word", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<SongResponse> importFromWord(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<SongResponse> importFromWord(
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal User uploader) {
+        assertCanUpload(uploader);
         try {
             SongRequest parsedRequest = documentImportService.parseSongFromWord(file);
-            SongResponse createdSong = songService.createSong(parsedRequest);
+            SongResponse createdSong = songService.createSong(parsedRequest, uploader);
             return ResponseEntity.status(HttpStatus.CREATED).body(createdSong);
         } catch (IllegalArgumentException exception) {
             return ResponseEntity.badRequest().build();
@@ -150,6 +160,16 @@ public class SongController {
         } catch (Exception e) {
             return ResponseEntity.internalServerError().build();
         }
+    }
+
+    private void assertCanUpload(User user) {
+        if (user == null) {
+            throw new AccessDeniedException("Anmeldung erforderlich.");
+        }
+        if (user.getRole() == Role.ADMIN || user.isUploadApproved()) {
+            return;
+        }
+        throw new AccessDeniedException("Song-Upload ist fuer diesen Benutzer noch nicht freigeschaltet.");
     }
 
 }
