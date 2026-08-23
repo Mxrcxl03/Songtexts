@@ -232,6 +232,63 @@ class DocumentExportServiceAlignmentTest {
         }
     }
 
+    @Test
+    void export_formatsAdditionalSongPartsFromFormattingTable() throws IOException {
+        Song song = new Song("Artist", "Song Title", "Album");
+        song.setLines(List.of(
+                new SongLine("[Strophe 3]", 0),
+                new SongLine("Verse line", 1),
+                new SongLine("[Strophe End]", 2),
+                new SongLine("[Pre Refrain 2]", 3),
+                new SongLine("Pre refrain line", 4),
+                new SongLine("[Bridge]", 5),
+                new SongLine("Bridge line", 6),
+                new SongLine("[Duett blau]", 7),
+                new SongLine("Blue duet line", 8),
+                new SongLine("[Duett rot]", 9),
+                new SongLine("Red duet line", 10),
+                new SongLine("[Fade Out]", 11),
+                new SongLine("Fade line", 12),
+                new SongLine("[Duett End]", 13),
+                new SongLine("[Solo]", 14),
+                new SongLine("Custom line", 15),
+                new SongLine("[Solo End]", 16),
+                new SongLine("[Intro End]", 17)));
+
+        String html = service.renderHtml(song);
+
+        assertFalse(html.contains("[Strophe 3]"));
+        assertTrue(html.contains("<p class=\"song-lyric-line\">3.   Verse line</p>"));
+        assertTrue(html.contains("<p class=\"song-lyric-line is-after-strophe-end is-underlined-heading is-songpart-line\">PRE REFRAIN 2:</p>"));
+        assertTrue(html.contains("<p class=\"song-lyric-line is-refrain-content\">Pre refrain line</p>"));
+        assertTrue(html.contains("<p class=\"song-lyric-line is-underlined-heading is-songpart-line\">BRIDGE:</p>"));
+        assertTrue(html.contains("<p class=\"song-lyric-line\">Bridge line</p>"));
+        assertTrue(html.contains("<p class=\"song-lyric-line is-underlined-heading is-songpart-line\">DUETT:</p>"));
+        assertTrue(html.contains("<p class=\"song-lyric-line is-duet-blue-content\">Blue duet line</p>"));
+        assertTrue(html.contains("<p class=\"song-lyric-line is-duet-red-content\">Red duet line</p>"));
+        assertTrue(html.contains("<p class=\"song-lyric-line is-underlined-heading is-songpart-line\">FADE OUT:</p>"));
+        assertTrue(html.contains("<p class=\"song-lyric-line is-duet-red-content\">Fade line</p>"));
+        assertFalse(html.contains("[Duett End]"));
+        assertTrue(html.contains("<p class=\"song-lyric-line is-underlined-heading is-songpart-line\">SOLO:</p>"));
+        assertFalse(html.contains("[Solo End]"));
+        assertFalse(html.contains("[Intro End]"));
+
+        byte[] docx = service.exportToWord(song);
+        try (XWPFDocument document = new XWPFDocument(new ByteArrayInputStream(docx))) {
+            List<String> texts = document.getParagraphs().stream().map(XWPFParagraph::getText).toList();
+            assertFalse(texts.contains("[Strophe 3]"));
+            assertTrue(texts.contains("3.   Verse line"));
+            assertTrue(texts.contains("PRE REFRAIN 2:"));
+            assertTrue(texts.contains("BRIDGE:"));
+            assertTrue(texts.contains("DUETT:"));
+            assertTrue(texts.contains("FADE OUT:"));
+            assertTrue(texts.contains("SOLO:"));
+            assertFalse(texts.contains("[Duett End]"));
+            assertFalse(texts.contains("[Solo End]"));
+            assertFalse(texts.contains("[Intro End]"));
+        }
+    }
+
     private Song sampleSong() {
         Song song = new Song("Depeche Mode", "Personal Jesus", "Violator");
         song.setMode("Dur");

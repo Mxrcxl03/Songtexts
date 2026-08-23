@@ -6,18 +6,39 @@ const LIKELY_CHORD_PATTERN =
 const SONG_PART_LINE_PATTERN = /^\s*\[([^\]]+)\]\s*$/;
 const KNOWN_SONG_PARTS = new Set([
   'intro',
+  'intro end',
   'strophe',
   'strophe end',
   'pre-refrain',
+  'pre refrain',
+  'pre-refrain end',
+  'pre refrain end',
   'refrain',
   'refrain end',
+  'part',
+  'part end',
+  'chorus',
+  'chorus end',
   'backgroundgesang',
   'backgroundgesang end',
   'bridge',
+  'bridge end',
   'instrumental',
+  'instrumental end',
   'outro',
+  'outro end',
+  'duett blau',
+  'duett (blau)',
+  'duett rot',
+  'duett (rot)',
+  'duett end',
+  'fade out',
+  'fade out end',
+  'fadeout',
+  'fadeout end',
 ]);
 const REFRAIN_WITH_REPEAT_PATTERN = /^refrain\s*:\s*\d+\s*x$/i;
+const NUMBERED_SONG_PART_PATTERN = /^(intro\s+[1-9]\d*|strophe\s+[1-9]\d*|pre[-\s]?refrain\s+[1-9]\d*|refrain\s+[1-9]\d*|part\s+[1-9]\d*|chorus\s+[1-9]\d*|backgroundgesang\s+[1-9]\d*|bridge\s+[1-9]\d*|instrumental\s+[1-9]\d*|outro\s+[1-9]\d*|fade\s*out\s+[1-9]\d*)$/i;
 
 const isSongPartLine = (lineText: string): boolean => {
   const match = lineText.match(SONG_PART_LINE_PATTERN);
@@ -28,6 +49,7 @@ const isSongPartLine = (lineText: string): boolean => {
 
   if (KNOWN_SONG_PARTS.has(label)) return true;
   if (REFRAIN_WITH_REPEAT_PATTERN.test(label)) return true;
+  if (NUMBERED_SONG_PART_PATTERN.test(label)) return true;
 
   // In the editor, any pure [Label] line is treated as a song part line.
   return true;

@@ -64,7 +64,7 @@ const DOCX_IMPORT_EXPORT_RULES_TOOLTIP =
   'Import/Export-Regeln:\n'
   + '- Meta-Tags: Tagname: Wert (z. B. Titel: Neue Importprobe)\n'
   + '- Akkorde im Text: <Am>, <F#m>, <G>\n'
-  + '- Songparts als eigene Zeile: [Strophe], [Strophe End], [Refrain], [Bridge]';
+  + '- Songparts als eigene Zeile: [Strophe 1], [Strophe End], [Refrain 1], [Bridge 1]';
 
 const toNullableNumber = (value: string): number | null => {
   const parsed = value.trim() ? Number.parseInt(value, 10) : null;

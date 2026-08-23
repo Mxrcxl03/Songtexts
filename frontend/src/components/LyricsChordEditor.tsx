@@ -6,7 +6,16 @@ import type {
 } from 'react';
 import type { SongLine } from '../types/song';
 import type { ChordAnnotation } from '../types/chordAnnotation';
-import { getRefrainUnderlineFlags, getSongPartLabel, isSongPartLine } from '../utils/songPart';
+import {
+  getRefrainUnderlineFlags,
+  getSongPartLabel,
+  getSongPartRawLabel,
+  isDuetBlueLine,
+  isDuetEndLine,
+  isDuetRedLine,
+  isSongPartEndLine,
+  isSongPartLine,
+} from '../utils/songPart';
 
 type LyricsChordEditorProps = {
   lines: SongLine[];
@@ -16,19 +25,72 @@ type LyricsChordEditorProps = {
 };
 
 const SONG_PART_OPTIONS = [
-  'Intro',
-  'Strophe',
+  'Intro 1',
+  'Intro End',
+  'Strophe 1',
   'Strophe End',
-  'Pre-Refrain',
-  'Refrain',
+  'Pre Refrain 1',
+  'Pre Refrain End',
+  'Refrain 1',
   'Refrain End',
-  'Backgroundgesang',
+  'Part 1',
+  'Part End',
+  'Chorus 1',
+  'Chorus End',
+  'Backgroundgesang 1',
   'Backgroundgesang End',
-  'Bridge',
-  'Instrumental',
-  'Outro',
+  'Bridge 1',
+  'Bridge End',
+  'Instrumental 1',
+  'Instrumental End',
+  'Outro 1',
+  'Outro End',
+  'Duett blau',
+  'Duett rot',
+  'Duett End',
+  'Fade Out 1',
+  'Fade Out End',
   'Benutzerdefiniert',
-] as const;
+] satisfies string[];
+
+const DUET_START_OPTIONS = new Set(['Duett blau', 'Duett rot']);
+
+type OpenSongPartContext = {
+  requiredEndOption: string | null;
+  duetOpen: boolean;
+};
+
+type RepeatableSongPart = {
+  baseOption: string;
+  endOption: string;
+  pattern: RegExp;
+  formatNext: (nextNumber: number) => string;
+};
+
+const createRepeatableSongPart = (
+  name: string,
+  pattern: RegExp,
+  endOption = `${name} End`
+): RepeatableSongPart => ({
+  baseOption: `${name} 1`,
+  endOption,
+  pattern,
+  formatNext: (nextNumber: number) => `${name} ${nextNumber}`,
+});
+
+const REPEATABLE_SONG_PARTS: RepeatableSongPart[] = [
+  createRepeatableSongPart('Intro', /^intro(?:\s+(\d+))?$/),
+  createRepeatableSongPart('Strophe', /^strophe(?:\s+(\d+))?$/),
+  createRepeatableSongPart('Pre Refrain', /^pre[-\s]?refrain(?:\s+(\d+))?$/),
+  createRepeatableSongPart('Refrain', /^refrain(?:\s+(\d+))?$/),
+  createRepeatableSongPart('Part', /^part(?:\s+(\d+))?$/),
+  createRepeatableSongPart('Chorus', /^chorus(?:\s+(\d+))?$/),
+  createRepeatableSongPart('Backgroundgesang', /^backgroundgesang(?:\s+(\d+))?$/),
+  createRepeatableSongPart('Bridge', /^bridge(?:\s+(\d+))?$/),
+  createRepeatableSongPart('Instrumental', /^instrumental(?:\s+(\d+))?$/),
+  createRepeatableSongPart('Outro', /^outro(?:\s+(\d+))?$/),
+  createRepeatableSongPart('Fade Out', /^fade\s*out(?:\s+(\d+))?$/),
+];
 
 const MAX_CHORD_NAME_LENGTH = 14;
 const normalizeChord = (name: string): string =>
@@ -50,6 +112,143 @@ type ChordMarkerLayout = {
 const toSongPartLineText = (rawLabel: string): string => {
   const label = rawLabel.trim().replace(/^\[/, '').replace(/\]$/, '').trim();
   return label ? `[${label}]` : '';
+};
+
+const normalizeSongPartEndLabel = (rawLabel: string, label: string): string => {
+  const repeatablePart = getRepeatableSongPart(label);
+  if (repeatablePart) return repeatablePart.endOption;
+  if (label === 'refrain' || /^refrain\s*:\s*\d+\s*x$/.test(label) || /^refrain\s+\d+$/.test(label)) {
+    return 'Refrain End';
+  }
+  return `${rawLabel} End`;
+};
+
+const isSongPartEndOption = (option: string): boolean =>
+  getSongPartLabel(toSongPartLineText(option))?.endsWith(' end') ?? false;
+
+const getRepeatableSongPart = (label: string | null): RepeatableSongPart | null => {
+  if (!label) return null;
+  return REPEATABLE_SONG_PARTS.find((part) => part.pattern.test(label)) ?? null;
+};
+
+const cloneSongLineWithoutId = (line: SongLine): SongLine => ({
+  orderIndex: 0,
+  text: line.text ?? '',
+  chordAnnotations: (line.chordAnnotations ?? []).map((chord) => ({ ...chord })),
+});
+
+const getNextNumberedSongPartOptions = (lines: SongLine[]): Map<string, string> => {
+  const options = new Map<string, string>();
+
+  for (const repeatablePart of REPEATABLE_SONG_PARTS) {
+    let maxNumber = 0;
+
+    for (const line of lines) {
+      const label = getSongPartLabel(line.text ?? '');
+      if (!label) continue;
+
+      const match = label.match(repeatablePart.pattern);
+      if (!match) continue;
+
+      const explicitNumber = match[1] ? Number.parseInt(match[1], 10) : 1;
+      if (!Number.isNaN(explicitNumber)) {
+        maxNumber = Math.max(maxNumber, explicitNumber);
+      }
+    }
+
+    if (maxNumber > 0) {
+      options.set(repeatablePart.baseOption, repeatablePart.formatNext(maxNumber + 1));
+    }
+  }
+
+  return options;
+};
+
+const findCopySourceBlock = (lines: SongLine[], baseOption: string): SongLine[] | null => {
+  let fallbackMatch: SongLine[] | null = null;
+  let exactMatch: SongLine[] | null = null;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const label = getSongPartLabel(line.text ?? '');
+    const rawLabel = getSongPartRawLabel(line.text ?? '');
+    const repeatablePart = getRepeatableSongPart(label);
+
+    if (!label || !rawLabel || repeatablePart?.baseOption !== baseOption) {
+      continue;
+    }
+
+    const endLineText = toSongPartLineText(normalizeSongPartEndLabel(rawLabel, label));
+    const blockContent: SongLine[] = [];
+    let endFound = false;
+
+    for (let scanIndex = index + 1; scanIndex < lines.length; scanIndex += 1) {
+      const candidate = lines[scanIndex];
+      if ((candidate.text ?? '').trim().toLowerCase() === endLineText.toLowerCase()) {
+        endFound = true;
+        break;
+      }
+      blockContent.push(candidate);
+    }
+
+    if (!endFound) continue;
+
+    fallbackMatch = blockContent;
+    if (rawLabel.trim().toLowerCase() === baseOption.toLowerCase()) {
+      exactMatch = blockContent;
+    }
+  }
+
+  return exactMatch ?? fallbackMatch;
+};
+
+const getOpenSongPartContext = (lines: SongLine[]): OpenSongPartContext => {
+  let requiredEndOption: string | null = null;
+  let duetOpen = false;
+
+  for (const line of lines) {
+    const text = line.text ?? '';
+    const label = getSongPartLabel(text);
+    const rawLabel = getSongPartRawLabel(text);
+
+    if (isSongPartEndLine(text) && requiredEndOption) {
+      requiredEndOption = null;
+    } else if (
+      label &&
+      rawLabel &&
+      isSongPartLine(text) &&
+      !isSongPartEndLine(text) &&
+      !isDuetBlueLine(text) &&
+      !isDuetRedLine(text)
+    ) {
+      requiredEndOption = normalizeSongPartEndLabel(rawLabel, label);
+    }
+
+    if (isDuetBlueLine(text) || isDuetRedLine(text)) {
+      duetOpen = true;
+    } else if (isDuetEndLine(text)) {
+      duetOpen = false;
+    }
+  }
+
+  return { requiredEndOption, duetOpen };
+};
+
+const getAvailableSongPartOptions = ({
+  requiredEndOption,
+  duetOpen,
+}: OpenSongPartContext, nextNumberedOptions: Map<string, string>): string[] => {
+  if (requiredEndOption) return [requiredEndOption];
+
+  const options = SONG_PART_OPTIONS.flatMap((option) => {
+    if (isSongPartEndOption(option)) return [];
+    if (duetOpen && DUET_START_OPTIONS.has(option)) return [];
+
+    const nextNumberedOption = nextNumberedOptions.get(option);
+    return nextNumberedOption ? [option, nextNumberedOption] : [option];
+  });
+
+  return duetOpen ? [...options, 'Duett End'] : options;
 };
 
 const normalizeLine = (line: SongLine, orderIndex: number): SongLine => {
@@ -234,7 +433,6 @@ export function LyricsChordEditor({
   const [songPartMenuOpen, setSongPartMenuOpen] = useState<boolean>(false);
   const [songPartPreset, setSongPartPreset] = useState<string>(SONG_PART_OPTIONS[0]);
   const [songPartCustom, setSongPartCustom] = useState<string>('');
-  const [refrainRepeatCount, setRefrainRepeatCount] = useState<string>('1');
   const lineRefs = useRef(new Map<number, HTMLDivElement>());
   const lineStackRefs = useRef(new Map<number, HTMLDivElement>());
   const charButtonRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -257,10 +455,37 @@ export function LyricsChordEditor({
       ),
     [lines]
   );
+  const songPartInsertIndex = Math.min(Math.max(selectedLine, 0), safeLines.length);
+  const songPartContext = useMemo(
+    () => getOpenSongPartContext(safeLines.slice(0, songPartInsertIndex)),
+    [safeLines, songPartInsertIndex]
+  );
+  const nextNumberedSongPartOptions = useMemo(
+    () => getNextNumberedSongPartOptions(safeLines.slice(0, songPartInsertIndex)),
+    [safeLines, songPartInsertIndex]
+  );
+  const availableSongPartOptions = useMemo(
+    () => getAvailableSongPartOptions(songPartContext, nextNumberedSongPartOptions),
+    [nextNumberedSongPartOptions, songPartContext]
+  );
+  const activeSongPartPreset = availableSongPartOptions.includes(songPartPreset)
+    ? songPartPreset
+    : availableSongPartOptions[0] ?? SONG_PART_OPTIONS[0];
+  const selectedSongPartLabel = getSongPartLabel(
+    toSongPartLineText(
+      activeSongPartPreset === 'Benutzerdefiniert' ? songPartCustom : activeSongPartPreset
+    )
+  );
 
   const emit = (next: SongLine[]) => onChange(normalizeLines(next));
   const isLockedSongPartLineAt = (lineIndex: number): boolean =>
     lockSongPartLines && isSongPartLine(safeLines[lineIndex]?.text ?? '');
+
+  useEffect(() => {
+    if (songPartPreset === activeSongPartPreset) return;
+    setSongPartPreset(activeSongPartPreset);
+    setSongPartCustom('');
+  }, [activeSongPartPreset, songPartPreset]);
 
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -574,31 +799,39 @@ export function LyricsChordEditor({
   };
 
   const insertSongPartLine = () => {
-    let selectedLabel =
-      songPartPreset === 'Benutzerdefiniert' ? songPartCustom : songPartPreset;
-    if (selectedSongPartLabel === 'refrain') {
-      const parsedCount = Number.parseInt(refrainRepeatCount, 10);
-      const repeatCount = Number.isNaN(parsedCount) ? 1 : Math.max(1, parsedCount);
-      selectedLabel = repeatCount > 1 ? `Refrain: ${repeatCount}x` : 'Refrain';
-    }
+    const selectedLabel =
+      activeSongPartPreset === 'Benutzerdefiniert' ? songPartCustom : activeSongPartPreset;
     const lineText = toSongPartLineText(selectedLabel);
     if (!lineText) return;
 
-    const targetIndex = Math.min(Math.max(selectedLine, 0), safeLines.length);
-    const nextLine: SongLine = {
-      orderIndex: 0,
-      text: lineText,
-      chordAnnotations: [],
-    };
+    const targetIndex = songPartInsertIndex;
+    const repeatablePart = getRepeatableSongPart(selectedSongPartLabel);
+    const sourceBlock =
+      repeatablePart?.baseOption === activeSongPartPreset
+        ? findCopySourceBlock(safeLines.slice(0, targetIndex), repeatablePart.baseOption)
+        : null;
+    const insertedLines: SongLine[] =
+      sourceBlock !== null
+        ? [
+            { orderIndex: 0, text: lineText, chordAnnotations: [] },
+            ...sourceBlock.map(cloneSongLineWithoutId),
+            {
+              orderIndex: 0,
+              text: toSongPartLineText(
+                normalizeSongPartEndLabel(activeSongPartPreset, selectedSongPartLabel ?? '')
+              ),
+              chordAnnotations: [],
+            },
+          ]
+        : [{ orderIndex: 0, text: lineText, chordAnnotations: [] }];
 
     emit([
       ...safeLines.slice(0, targetIndex),
-      nextLine,
+      ...insertedLines,
       ...safeLines.slice(targetIndex),
     ]);
 
-    if (targetIndex < safeLines.length) keepFocus(targetIndex + 1, 0);
-    else keepFocus(targetIndex, Array.from(nextLine.text).length);
+    keepFocus(targetIndex + insertedLines.length, 0);
 
     setSongPartMenuOpen(false);
     setSongPartCustom('');
@@ -611,11 +844,6 @@ export function LyricsChordEditor({
     return lyricLineCounter;
   });
   const refrainUnderlineFlags = getRefrainUnderlineFlags(safeLines);
-  const selectedSongPartLabel = getSongPartLabel(
-    toSongPartLineText(
-      songPartPreset === 'Benutzerdefiniert' ? songPartCustom : songPartPreset
-    )
-  );
 
   const removeChordAtSelection = () => {
     const lineIndex = bubble?.lineIndex ?? selectedLine;
@@ -882,16 +1110,16 @@ export function LyricsChordEditor({
               <div className="lyrics-songpart-menu">
                 <select
                   className="text-input"
-                  value={songPartPreset}
+                  value={activeSongPartPreset}
                   onChange={(event) => setSongPartPreset(event.target.value)}
                 >
-                  {SONG_PART_OPTIONS.map((option) => (
+                  {availableSongPartOptions.map((option) => (
                     <option key={option} value={option}>
                       {option}
                     </option>
                   ))}
                 </select>
-                {songPartPreset === 'Benutzerdefiniert' && (
+                {activeSongPartPreset === 'Benutzerdefiniert' && (
                   <input
                     type="text"
                     value={songPartCustom}
@@ -900,27 +1128,15 @@ export function LyricsChordEditor({
                     className="text-input"
                   />
                 )}
-                {selectedSongPartLabel === 'refrain' && (
-                  <>
-                    <label htmlFor="refrain-repeat-count">Anzahl Wiederholungen:</label>
-                    <input
-                      id="refrain-repeat-count"
-                      type="number"
-                      min={1}
-                      step={1}
-                      value={refrainRepeatCount}
-                      onChange={(event) => setRefrainRepeatCount(event.target.value)}
-                      className="text-input"
-                    />
-                    <p>
-                      Hinweis: 1x wird als <code>[Refrain]</code> eingefuegt, ab 2x als{' '}
-                      <code>[Refrain: Nx]</code>.
-                    </p>
-                  </>
-                )}
                 {selectedSongPartLabel === 'refrain end' && (
                   <p>
                     Hinweis: <code>[Refrain End]</code> beendet den Refrain-Block, wird in der Song-Detail-Seite
+                    aber nicht angezeigt.
+                  </p>
+                )}
+                {selectedSongPartLabel === 'duett end' && (
+                  <p>
+                    Hinweis: <code>[Duett End]</code> beendet den Duett-Block, wird in der Song-Detail-Seite
                     aber nicht angezeigt.
                   </p>
                 )}

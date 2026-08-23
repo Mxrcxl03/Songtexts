@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
@@ -141,7 +142,7 @@ public class DocumentExportService {
                 }
 
                 .song-lyric-line.is-songpart-line {
-                    color: #0050a4;
+                    color: inherit;
                 }
 
                 .song-lyric-line.is-instrumental-songpart {
@@ -150,6 +151,9 @@ public class DocumentExportService {
 
                 .song-lyric-line.is-refrain-content {
                     font-weight: 700;
+                    text-decoration: underline;
+                    text-underline-offset: 0.14em;
+                    text-decoration-thickness: 0.08em;
                 }
 
                 .song-lyric-line.is-background-content {
@@ -157,6 +161,14 @@ public class DocumentExportService {
                     text-decoration: underline;
                     text-underline-offset: 0.14em;
                     text-decoration-thickness: 0.08em;
+                }
+
+                .song-lyric-line.is-duet-blue-content {
+                    color: #4472c4;
+                }
+
+                .song-lyric-line.is-duet-red-content {
+                    color: #d36d35;
                 }
 
                 .song-lyrics-title {
@@ -253,11 +265,17 @@ public class DocumentExportService {
     private static final String OUTRO_LABEL = "outro";
     private static final String BACKGROUNDGESANG_LABEL = "backgroundgesang";
     private static final String BACKGROUNDGESANG_END_LABEL = "backgroundgesang end";
+    private static final String DUETT_END_LABEL = "duett end";
     private static final String INSTRUMENTAL_LABEL = "instrumental";
-    private static final String SONG_PART_COLOR = "0050A4";
+    private static final String SONG_PART_COLOR = "000000";
     private static final String INSTRUMENTAL_COLOR = "D4624A";
     private static final String BACKGROUND_CONTENT_COLOR = "6B7280";
+    private static final String DUET_BLUE_CONTENT_COLOR = "4472C4";
+    private static final String DUET_RED_CONTENT_COLOR = "D36D35";
     private static final Pattern REFRAIN_WITH_REPEAT_PATTERN = Pattern.compile("^refrain\\s*:\\s*\\d+\\s*x$");
+    private static final Pattern NUMBERED_STROPHE_PATTERN = Pattern.compile("^strophe\\s+([1-9]\\d*)$");
+    private static final Pattern NUMBERED_PRE_REFRAIN_PATTERN = Pattern.compile("^pre[-\\s]?refrain\\s+([1-9]\\d*)$");
+    private static final Pattern NUMBERED_REFRAIN_PATTERN = Pattern.compile("^refrain\\s+([1-9]\\d*)$");
 
     /**
      * Export song to Word (.docx) format
@@ -359,10 +377,17 @@ public class DocumentExportService {
                 }
                 if (line.refrainContent()) {
                     lyricRun.setBold(true);
+                    lyricRun.setUnderline(UnderlinePatterns.SINGLE);
                 }
                 if (line.backgroundContent()) {
                     lyricRun.setColor(BACKGROUND_CONTENT_COLOR);
                     lyricRun.setUnderline(UnderlinePatterns.SINGLE);
+                }
+                if (line.duetBlueContent()) {
+                    lyricRun.setColor(DUET_BLUE_CONTENT_COLOR);
+                }
+                if (line.duetRedContent()) {
+                    lyricRun.setColor(DUET_RED_CONTENT_COLOR);
                 }
                 if (line.underlinedHeading()) {
                     lyricRun.setUnderline(UnderlinePatterns.SINGLE);
@@ -564,6 +589,12 @@ public class DocumentExportService {
             if (line.backgroundContent()) {
                 paragraphClass += " is-background-content";
             }
+            if (line.duetBlueContent()) {
+                paragraphClass += " is-duet-blue-content";
+            }
+            if (line.duetRedContent()) {
+                paragraphClass += " is-duet-red-content";
+            }
             if (!chordLine.isBlank()) {
                 html.append("    <p class=\"").append(paragraphClass).append(" song-chord-line\">").append(chordLine).append("</p>\n");
             }
@@ -592,8 +623,10 @@ public class DocumentExportService {
         Integer currentStropheNumber = null;
         boolean stropheNumberConsumed = false;
         boolean gapBeforeNextVisibleLine = false;
-        boolean inRefrainBlock = false;
+        boolean inEmphasizedBlock = false;
         boolean inBackgroundBlock = false;
+        boolean inDuetBlueBlock = false;
+        boolean inDuetRedBlock = false;
 
         for (SongLine line : lines) {
             if (line == null) {
@@ -602,9 +635,11 @@ public class DocumentExportService {
             String text = nullToEmpty(line.getText());
             String songPartLabel = songPartLabel(text);
 
-            if (STROPHE_LABEL.equals(songPartLabel)) {
+            Integer explicitStropheNumber = stropheNumber(songPartLabel);
+            if (explicitStropheNumber != null) {
                 inStropheBlock = true;
-                currentStropheNumber = nextStropheNumber++;
+                currentStropheNumber = explicitStropheNumber == 0 ? nextStropheNumber : explicitStropheNumber;
+                nextStropheNumber = Math.max(nextStropheNumber + 1, currentStropheNumber + 1);
                 stropheNumberConsumed = false;
                 continue;
             }
@@ -618,7 +653,7 @@ public class DocumentExportService {
             }
 
             if (REFRAIN_END_LABEL.equals(songPartLabel)) {
-                inRefrainBlock = false;
+                inEmphasizedBlock = false;
                 continue;
             }
 
@@ -627,13 +662,41 @@ public class DocumentExportService {
                 continue;
             }
 
-            boolean startsRefrainBlock = isRefrainLabel(songPartLabel);
-            if (startsRefrainBlock) {
-                inRefrainBlock = true;
+            if (DUETT_END_LABEL.equals(songPartLabel)) {
+                inDuetBlueBlock = false;
+                inDuetRedBlock = false;
+                continue;
             }
-            boolean startsBackgroundBlock = BACKGROUNDGESANG_LABEL.equals(songPartLabel);
+
+            if (isSongPartEndLabel(songPartLabel)) {
+                continue;
+            }
+
+            boolean startsEmphasizedBlock = isRefrainLabel(songPartLabel) || isPreRefrainLabel(songPartLabel);
+            boolean startsBackgroundBlock = isBackgroundgesangLabel(songPartLabel);
+            boolean startsDuetBlueBlock = isDuetBlueLabel(songPartLabel);
+            boolean startsDuetRedBlock = isDuetRedLabel(songPartLabel);
+            if (songPartLabel != null) {
+                if (!startsEmphasizedBlock) {
+                    inEmphasizedBlock = false;
+                }
+                if (!startsBackgroundBlock) {
+                    inBackgroundBlock = false;
+                }
+            }
+            if (startsEmphasizedBlock) {
+                inEmphasizedBlock = true;
+            }
             if (startsBackgroundBlock) {
                 inBackgroundBlock = true;
+            }
+            if (startsDuetBlueBlock) {
+                inDuetBlueBlock = true;
+                inDuetRedBlock = false;
+            }
+            if (startsDuetRedBlock) {
+                inDuetBlueBlock = false;
+                inDuetRedBlock = true;
             }
 
             String numberPrefix = "";
@@ -642,8 +705,10 @@ public class DocumentExportService {
                 stropheNumberConsumed = true;
             }
             String displayText = displayedSongPartText(songPartLabel);
-            boolean refrainContent = inRefrainBlock && !startsRefrainBlock && songPartLabel == null;
+            boolean refrainContent = inEmphasizedBlock && !startsEmphasizedBlock && songPartLabel == null;
             boolean backgroundContent = inBackgroundBlock && !startsBackgroundBlock && songPartLabel == null;
+            boolean duetBlueContent = inDuetBlueBlock && !startsDuetBlueBlock && songPartLabel == null;
+            boolean duetRedContent = inDuetRedBlock && !startsDuetRedBlock && songPartLabel == null;
             exportLines.add(new ExportSongLine(
                     line,
                     numberPrefix,
@@ -652,7 +717,9 @@ public class DocumentExportService {
                     songPartLabel != null,
                     refrainContent,
                     backgroundContent,
-                    INSTRUMENTAL_LABEL.equals(songPartLabel)));
+                    duetBlueContent,
+                    duetRedContent,
+                    isInstrumentalLabel(songPartLabel)));
             gapBeforeNextVisibleLine = false;
         }
 
@@ -678,24 +745,91 @@ public class DocumentExportService {
         if (OUTRO_LABEL.equals(songPartLabel)) {
             return "OUTRO:";
         }
-        if (BACKGROUNDGESANG_LABEL.equals(songPartLabel)) {
-            return "BACKGROUNDGESANG:";
+        if ("bridge".equals(songPartLabel)) {
+            return "BRIDGE:";
         }
-        if (INSTRUMENTAL_LABEL.equals(songPartLabel)) {
-            return "INSTRUMENTAL:";
+        if ("fade out".equals(songPartLabel) || "fadeout".equals(songPartLabel)) {
+            return "FADE OUT:";
+        }
+        if (isPreRefrainLabel(songPartLabel)) {
+            return songPartLabel.replace('-', ' ').toUpperCase(Locale.ROOT) + ":";
+        }
+        if (isBackgroundgesangLabel(songPartLabel)) {
+            return songPartLabel.toUpperCase(Locale.ROOT) + ":";
+        }
+        if (isDuetBlueLabel(songPartLabel) || isDuetRedLabel(songPartLabel)) {
+            return "DUETT:";
+        }
+        if (isInstrumentalLabel(songPartLabel)) {
+            return songPartLabel.toUpperCase(Locale.ROOT) + ":";
         }
         if ("refrain".equals(songPartLabel)) {
             return "REFRAIN:";
         }
+        if (songPartLabel != null && NUMBERED_REFRAIN_PATTERN.matcher(songPartLabel).matches()) {
+            return songPartLabel.toUpperCase(Locale.ROOT) + ":";
+        }
         if (isRefrainLabel(songPartLabel)) {
             return "REFRAIN: " + songPartLabel.substring(songPartLabel.indexOf(':') + 1).trim();
+        }
+        if (songPartLabel != null
+                && stropheNumber(songPartLabel) == null
+                && !STROPHE_END_LABEL.equals(songPartLabel)
+                && !REFRAIN_END_LABEL.equals(songPartLabel)
+                && !BACKGROUNDGESANG_END_LABEL.equals(songPartLabel)
+                && !isSongPartEndLabel(songPartLabel)) {
+            return songPartLabel.toUpperCase(Locale.ROOT) + ":";
         }
         return null;
     }
 
+    private boolean isSongPartEndLabel(String songPartLabel) {
+        return songPartLabel != null && songPartLabel.endsWith(" end");
+    }
+
     private boolean isRefrainLabel(String songPartLabel) {
         return "refrain".equals(songPartLabel)
-                || (songPartLabel != null && REFRAIN_WITH_REPEAT_PATTERN.matcher(songPartLabel).matches());
+                || (songPartLabel != null && REFRAIN_WITH_REPEAT_PATTERN.matcher(songPartLabel).matches())
+                || (songPartLabel != null && NUMBERED_REFRAIN_PATTERN.matcher(songPartLabel).matches());
+    }
+
+    private boolean isPreRefrainLabel(String songPartLabel) {
+        return "pre-refrain".equals(songPartLabel)
+                || "pre refrain".equals(songPartLabel)
+                || (songPartLabel != null && NUMBERED_PRE_REFRAIN_PATTERN.matcher(songPartLabel).matches());
+    }
+
+    private boolean isBackgroundgesangLabel(String songPartLabel) {
+        return songPartLabel != null && songPartLabel.matches("^backgroundgesang(?:\\s+[1-9]\\d*)?$");
+    }
+
+    private boolean isInstrumentalLabel(String songPartLabel) {
+        return songPartLabel != null && songPartLabel.matches("^instrumental(?:\\s+[1-9]\\d*)?$");
+    }
+
+    private Integer stropheNumber(String songPartLabel) {
+        if (STROPHE_LABEL.equals(songPartLabel)) {
+            return 0;
+        }
+        if (songPartLabel == null) {
+            return null;
+        }
+        Matcher matcher = NUMBERED_STROPHE_PATTERN.matcher(songPartLabel);
+        return matcher.matches() ? Integer.valueOf(matcher.group(1)) : null;
+    }
+
+    private boolean isDuetBlueLabel(String songPartLabel) {
+        return "duett blau".equals(songPartLabel)
+                || "duett (blau)".equals(songPartLabel)
+                || "duet blue".equals(songPartLabel)
+                || "duet (blue)".equals(songPartLabel);
+    }
+
+    private boolean isDuetRedLabel(String songPartLabel) {
+        return "duett rot".equals(songPartLabel)
+                || "duett (rot)".equals(songPartLabel)
+                || "duet red".equals(songPartLabel)
+                || "duet (red)".equals(songPartLabel);
     }
 
     private String buildChordLine(SongLine line) {
@@ -1074,6 +1208,8 @@ public class DocumentExportService {
             boolean songPartLine,
             boolean refrainContent,
             boolean backgroundContent,
+            boolean duetBlueContent,
+            boolean duetRedContent,
             boolean instrumentalSongPart) {
         private String text() {
             if (displayText != null) {

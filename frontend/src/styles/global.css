@@ -25,6 +25,7 @@
   --chord-border-strong: rgba(var(--chord-rgb), 0.45);
   --chord-focus-bg: rgba(var(--chord-rgb), 0.1);
   --chord-focus-outline: rgba(var(--chord-rgb), 0.5);
+  --songpart-heading-color: var(--text-main);
 
   --navbar-bg: #1e1e1e;
   --navbar-text: #ffffff;
@@ -56,6 +57,7 @@
   --chord-border-strong: rgba(var(--chord-rgb), 0.45);
   --chord-focus-bg: rgba(var(--chord-rgb), 0.14);
   --chord-focus-outline: rgba(var(--chord-rgb), 0.52);
+  --songpart-heading-color: #60a5fa;
 
   --navbar-bg: #0b1220;
   --navbar-text: #f9fafb;
@@ -1967,10 +1969,13 @@ body {
 .lyrics-text-layer.is-refrain-emphasized .lyrics-line-readonly-text,
 .lyrics-text-layer.is-refrain-emphasized .lyrics-char-btn {
   font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.14em;
+  text-decoration-thickness: 0.08em;
 }
 
 .lyrics-text-layer.is-songpart-display {
-  color: #0050a4;
+  color: var(--songpart-heading-color);
 }
 
 .lyrics-text-layer.is-instrumental-songpart {
@@ -1985,6 +1990,20 @@ body {
   text-decoration: underline;
   text-underline-offset: 0.14em;
   text-decoration-thickness: 0.08em;
+}
+
+.lyrics-text-layer.is-duet-blue-content .lyrics-line-editable,
+.lyrics-text-layer.is-duet-blue-content .lyrics-editor-chars,
+.lyrics-text-layer.is-duet-blue-content .lyrics-line-readonly-text,
+.lyrics-text-layer.is-duet-blue-content .lyrics-char-btn {
+  color: #4472c4;
+}
+
+.lyrics-text-layer.is-duet-red-content .lyrics-line-editable,
+.lyrics-text-layer.is-duet-red-content .lyrics-editor-chars,
+.lyrics-text-layer.is-duet-red-content .lyrics-line-readonly-text,
+.lyrics-text-layer.is-duet-red-content .lyrics-char-btn {
+  color: #d36d35;
 }
 
 .lyrics-line-editable,

@@ -74,6 +74,8 @@ function SongLineViewRow({
   isDisplayedSongPart,
   isBackgroundContent,
   isInstrumentalSongPart,
+  isDuetBlueContent,
+  isDuetRedContent,
 }: Readonly<{
   line: SongLine;
   underlineText: boolean;
@@ -84,6 +86,8 @@ function SongLineViewRow({
   isDisplayedSongPart: boolean;
   isBackgroundContent: boolean;
   isInstrumentalSongPart: boolean;
+  isDuetBlueContent: boolean;
+  isDuetRedContent: boolean;
 }>) {
   const text = displayText ?? line?.text ?? '';
   const chordLine = buildChordLine(text, line?.chordAnnotations ?? []);
@@ -114,6 +118,8 @@ function SongLineViewRow({
               isDisplayedSongPart ? 'is-songpart-display' : '',
               isBackgroundContent ? 'is-background-content' : '',
               isInstrumentalSongPart ? 'is-instrumental-songpart' : '',
+              isDuetBlueContent ? 'is-duet-blue-content' : '',
+              isDuetRedContent ? 'is-duet-red-content' : '',
             ].filter(Boolean).join(' ')
           }
         >
@@ -451,6 +457,8 @@ export function SongDetailPage() {
             isDisplayedSongPart,
             isBackgroundContent,
             isInstrumentalSongPart,
+            isDuetBlueContent,
+            isDuetRedContent,
           }, index) => (
             <SongLineViewRow
               key={line.id ?? index}
@@ -463,6 +471,8 @@ export function SongDetailPage() {
               isDisplayedSongPart={isDisplayedSongPart}
               isBackgroundContent={isBackgroundContent}
               isInstrumentalSongPart={isInstrumentalSongPart}
+              isDuetBlueContent={isDuetBlueContent}
+              isDuetRedContent={isDuetRedContent}
             />
           ))}
         </div>
